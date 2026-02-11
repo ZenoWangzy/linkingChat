@@ -70,6 +70,7 @@ linkingChat是产品
 | 语音消息 | |
 | 语音/视频通话 | |❌：
 
+以上所有除了语音视频通话
 ### Q5. MVP 的 AI 功能边界
 
 三大交互模式中，MVP 第一版做哪些？
@@ -83,7 +84,7 @@ linkingChat是产品
 PRD 标注 Draft & Verify 和 Predictive Actions 是 P0，但第一版全做会拉长周期。建议：**MVP 只做 Draft & Verify**，其他后续迭代。你的意见？
 
 **回答：**
-raft & Verify（草稿确认）
+都做
 ---
 
 ## 四、设备配对与安全模型
