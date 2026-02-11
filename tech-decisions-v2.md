@@ -14,7 +14,7 @@
 |---|------|---------|-------------|
 | Q1 | 产品名称 | **linkingChat** | 仓库名/包名统一为 `linkingchat` 或 `linking-chat` |
 | Q4 | MVP 社交功能 | 除语音/视频通话外**全部需要** | MVP 社交范围大，见下方详表 |
-| Q5 | MVP AI 功能 | 只做 **Draft & Verify** | Whisper 和 Predictive Actions 推迟到后续迭代 |
+| Q5 | MVP AI 功能 | **都做**（三个模式全部） | Draft & Verify + Whisper + Predictive Actions 全部纳入 MVP |
 | Q6 | 设备配对方式 | **同账号自动关联** | 不需要扫码/配对码流程，登录即绑定 |
 | Q7 | 多台电脑 | **支持多台，发指令时选择目标** | 需要设备注册表 + 设备选择器 UI |
 | Q8 | 远程命令安全 | **黑名单制**（屏蔽危险命令） | 需维护危险命令列表，其余放行 |
@@ -181,7 +181,7 @@ const openclawNode = spawn('openclaw', [
 | **Spacebar** | TypeScript ✅ | PostgreSQL ✅ | ❌ 无 | AGPL ❌ | ✅ | 中等（需 fork） |
 | **Rocket.Chat** | TypeScript ✅ | MongoDB ❌ | ✅ 官方 | MIT ✅ | DDP（非标准）❌ | 好（Apps Engine） |
 | **Matrix/Synapse** | Python ❌ | PostgreSQL ✅ | ✅ 成熟 | AGPL ❌ | ✅ | 优秀（原生支持） |
-| **Tinode** | Go ❌ | MySQL/MongoDB ❌ | ✅ 官方 | GPL ❌ | ✅ | 有限 |
+| **Tinode** | Go ❌ | MySQL/PG/MongoDB ⚠️ | 🚨 Dart SDK 已归档 | GPL ❌ | ✅ | 有限 |
 | **Revolt/Stoat** | Rust ❌ | MongoDB ❌ | ❌ 无 | AGPL ❌ | ✅ | 中等（需 fork Rust） |
 | **Mattermost** | Go ❌ | PostgreSQL ✅ | ❌ 社区 | MIT ✅ | ✅ | 有限（Go 插件） |
 | **Zulip** | Python ❌ | PostgreSQL ✅ | ✅ 官方 | Apache-2.0 ✅ | ✅ | 有限 |
@@ -207,7 +207,7 @@ const openclawNode = spawn('openclaw', [
 | PostgreSQL 聊天数据 Schema | **Mattermost** (`server/channels/store/sqlstore/`) | 生产级 PG schema，消息/频道/用户表设计 |
 | TypeORM 实体设计 | **Spacebar** (`src/util/entities/`) | User/Message/Channel/Relationship 实体 |
 | 可扩展消息协议设计 | **Matrix 规范** (extensible events MSC1767) | 命名空间化事件类型，设备控制可复用此模式 |
-| Flutter 聊天 SDK API 设计 | **Tinode Dart SDK** (`tinode` pub.dev 包) | 连接管理、Topic 订阅、消息处理 |
+| Flutter 聊天 SDK API 设计 | ~~**Tinode Dart SDK**~~ (已归档) | ⚠️ SDK 已于 2025-11 归档，仅供协议层参考 |
 | Flutter 聊天 UI 组件 | **Rocket.Chat Flutter SDK** | 消息列表、输入栏、文件选择器组件 |
 | REST API 设计模式 | **Discord API 文档**（公开） | 端点命名、分页、限流、错误格式 |
 | 推送通知集成 | **Tinode** (TNPG 服务) | FCM / APNs 模式 |
@@ -391,7 +391,7 @@ const openclawNode = spawn('openclaw', [
    - 同步所有社交功能
 ```
 
-### Phase 3: 社交扩展 + AI
+### Phase 3: 社交扩展 + AI（全部三个 AI 模式）
 
 ```
 1. 群聊模块
@@ -407,10 +407,23 @@ const openclawNode = spawn('openclaw', [
    - FCM (Android) + APNs (iOS)
    - 离线消息队列 (Redis)
 
-4. Draft & Verify (AI 功能)
-   - LLM Router (DeepSeek / Kimi 2.5)
-   - 草稿生成 → 用户确认 → 执行
-   - 与 OpenClaw exec-approvals `ask` 模式对接
+4. AI 模块（Q5 确认：三个模式全做）
+   a. Draft & Verify（草稿确认）[P0]
+      - LLM Router (DeepSeek / Kimi 2.5)
+      - 草稿生成 → 用户确认 → 执行
+      - 与 OpenClaw exec-approvals `ask` 模式对接
+      - 数据表：draft_states
+
+   b. The Whisper（耳语建议）[P1]
+      - 收到新消息 → LLM 生成 3 条回复建议 → <800ms 推送到客户端
+      - 超过 1000ms 客户端放弃显示
+      - 使用 DeepSeek（低延迟）做建议生成
+      - 数据表：ai_suggestions (type='whisper')
+
+   c. Predictive Actions（预测执行）[P0]
+      - 分析对话上下文（如 shell 错误）→ 生成动作卡片
+      - 安全分级（safe/warning/dangerous）与黑名单制协同
+      - 数据表：ai_suggestions (type='predictive')
 ```
 
 ### Phase 4: 生产化
@@ -437,7 +450,36 @@ const openclawNode = spawn('openclaw', [
 
 ---
 
-## 附录：参考资源
+## 附录 A：Tinode 调研结论（2026-02-11 补充）
+
+> 团队同事提议使用 [tinode/chat](https://github.com/tinode/chat) 作为 IM 后端。经深度调研后结论如下。
+> 完整调研报告见 `docs/dev-plan/research-tinode.md`。
+
+### 结论：不采用 Tinode 做后端，但借鉴其协议设计
+
+**不采用的原因**（按严重程度排序）：
+
+| # | 原因 | 严重程度 |
+|---|------|---------|
+| 1 | Dart SDK 已归档（2025-11-18），仅有 Dart 2.12 alpha 版本，不兼容 Dart 3.x | 🚨 致命 |
+| 2 | GPL-3.0 许可证：虽有 SaaS loophole，但限制分发场景 | 🚨 高 |
+| 3 | Go 语言 vs 团队确认的 TypeScript everywhere | 🚨 高 |
+| 4 | AI 三模式（Draft & Verify + Whisper + Predictive Actions）需要 gRPC 插件桥接，<800ms 延迟约束有风险 | ⚠️ 高 |
+| 5 | 设备远程控制是 linkingChat 核心差异化功能，Tinode 无此概念 | ⚠️ 中 |
+
+**从 Tinode 借鉴的设计**：
+
+| 借鉴内容 | 应用方式 |
+|---------|---------|
+| Topic 类型体系 (me/fnd/usr/grp/chn) | 丰富 Conversation type 设计 |
+| `{note}` kp/recv/read 事件 | WebSocket 输入状态 + 送达确认 + 已读回执设计 |
+| 位图 ACL (JRWPASDON, Want+Given→Effective) | 未来群权限系统参考 |
+| FireHose CONTINUE/DROP/RESPOND/REPLACE | AI 消息拦截器模式灵感 |
+| seq/recv/read 三标记 | 消息送达追踪方案参考 |
+
+---
+
+## 附录 B：参考资源
 
 | 资源 | 链接 | 用途 |
 |------|------|------|
@@ -448,6 +490,7 @@ const openclawNode = spawn('openclaw', [
 | OpenClaw GitHub | https://github.com/openclaw/openclaw | OpenClaw 源码 |
 | Matrix 规范 | https://spec.matrix.org/latest/ | 消息协议设计参考 |
 | Discord API 文档 | https://discord.com/developers/docs | REST API 设计参考 |
-| Tinode Dart SDK | https://pub.dev/packages/tinode | Flutter SDK 设计参考 |
+| Tinode 调研报告 | docs/dev-plan/research-tinode.md | Tinode 深度调研（许可证、协议、Flutter SDK、对比分析） |
+| Tinode Dart SDK（已归档） | https://github.com/tinode/dart-sdk | ⚠️ 2025-11 归档，仅供参考 |
 | Spacebar Server | https://github.com/spacebarchat/server | TypeORM Entity 设计参考（仅阅读） |
 | Mattermost | https://github.com/mattermost/mattermost | PostgreSQL Schema 参考 |
