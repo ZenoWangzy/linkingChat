@@ -253,7 +253,7 @@ service Plugin {
 
 ## 九、结论
 
-### 不推荐将 Tinode 作为 linkingChat 后端
+### 不推荐将 Tinode 作为 LinkingChat 后端
 
 原因按严重程度排序：
 
