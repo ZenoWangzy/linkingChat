@@ -126,7 +126,10 @@ class WsService {
         'timeout': timeout,
       },
     }, ack: (response) {
-      debugPrint('[WS] <<< sendCommand ACK: $response');
+      debugPrint('[WS] <<< sendCommand ACK: $response (${response.runtimeType})');
+      if (response is Map && response['success'] == false) {
+        _notifyListeners(WsEvents.commandSendError, response);
+      }
     });
   }
 

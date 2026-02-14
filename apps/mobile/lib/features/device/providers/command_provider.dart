@@ -61,6 +61,19 @@ class CommandNotifier extends StateNotifier<CommandStatus> {
         state = state.copyWith(state: CommandState.waiting);
       }
     });
+
+    wsService.on(WsEvents.commandSendError, (data) {
+      // Fired when emitWithAck returns success:false (e.g. COMMAND_DANGEROUS).
+      if (state.state == CommandState.sending) {
+        final response = data is Map ? data : {};
+        final error = response['error'];
+        final message = error is Map ? error['message'] as String? : null;
+        state = CommandStatus(
+          state: CommandState.error,
+          errorMessage: message ?? 'Command rejected',
+        );
+      }
+    });
   }
 
   Future<void> executeCommand({
@@ -100,6 +113,7 @@ class CommandNotifier extends StateNotifier<CommandStatus> {
     final wsService = _ref.read(wsServiceProvider);
     wsService.off(WsEvents.resultDelivered);
     wsService.off(WsEvents.commandAck);
+    wsService.off(WsEvents.commandSendError);
     super.dispose();
   }
 }

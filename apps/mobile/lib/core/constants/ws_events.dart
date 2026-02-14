@@ -7,6 +7,7 @@ class WsEvents {
 
   // Server -> Client
   static const commandAck = 'device:command:ack';
+  static const commandSendError = 'device:command:sendError'; // client-only
   static const resultDelivered = 'device:result:delivered';
   static const resultProgress = 'device:result:progress';
   static const statusChanged = 'device:status:changed';

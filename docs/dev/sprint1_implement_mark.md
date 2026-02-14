@@ -617,6 +617,48 @@ wsService.on(WsEvents.resultDelivered, (data) {
 });
 ```
 
+#### Bug 5：emitWithAck ACK 回调中 Map 类型不匹配 — 危险命令拦截无法即时显示
+
+**现象**：发送 `rm -rf /`，服务端立即在 ACK 中返回 `{success: false, error: {code: COMMAND_DANGEROUS, ...}}`，浏览器 Console 显示正确，但 UI 仍显示 "Sending command..." 直到 30 秒超时。
+
+**调试过程**：
+1. 第一次尝试：在 `sendCommand` 中添加 `onAckError` 回调，用 `response is Map<String, dynamic>` 判断 → 回调不触发
+2. 第二次尝试：改为 `response is Map`（放宽类型检查）→ 仍不触发。检查日志发现 `(runtimeType)` 后缀未出现，说明代码未更新
+3. 发现 Flutter Web dev server 有编译缓存，`flutter clean` 后重启才能加载新代码
+
+**根因**：
+- `emitWithAck` 的 ACK 回调在 socket_io_client Web 实现中可能运行在不同的执行上下文，直接修改 StateNotifier 的 state 不可靠
+- 同时 Flutter Web dev server 有强缓存，热重启不够，需要 `flutter clean` + 重启
+
+**修复**：放弃直接回调模式。改用已验证可靠的 `_notifyListeners` 事件分发系统：
+- `ws_service.dart`：ACK 返回 `success: false` 时，调用 `_notifyListeners(WsEvents.commandSendError, response)`
+- `command_provider.dart`：监听 `commandSendError` 事件，立即转为 error 状态
+- `ws_events.dart`：新增客户端专用事件 `commandSendError`
+
+```dart
+// ws_service.dart — ACK 回调中分发错误事件
+ack: (response) {
+  if (response is Map && response['success'] == false) {
+    _notifyListeners(WsEvents.commandSendError, response);
+  }
+});
+
+// command_provider.dart — 监听错误事件
+wsService.on(WsEvents.commandSendError, (data) {
+  if (state.state == CommandState.sending) {
+    final response = data is Map ? data : {};
+    final error = response['error'];
+    final message = error is Map ? error['message'] as String? : null;
+    state = CommandStatus(
+      state: CommandState.error,
+      errorMessage: message ?? 'Command rejected',
+    );
+  }
+});
+```
+
+**经验教训**：Flutter Web 中 socket_io_client 的 `emitWithAck` ACK 回调和 `socket.on()` 事件回调虽然都在 JS 上下文中执行，但经过 `_notifyListeners` 分发的事件更可靠地触发 StateNotifier 重建。开发 Flutter Web 时修改核心逻辑后必须 `flutter clean` + 重启 dev server。
+
 ### 调试技巧总结
 
 | 技巧 | 说明 |
@@ -626,6 +668,7 @@ wsService.on(WsEvents.resultDelivered, (data) {
 | 浏览器 Console | Flutter Web 的 `debugPrint` 输出到浏览器 Console，可实时看 WS 事件流 |
 | 硬刷新 | Flutter Web dev server 不会热更新所有改动，需 `Ctrl+Shift+R` 强制重载 |
 | Flutter dev server 重启 | 代码结构性变更后需停止并重启 `flutter run`，否则旧代码仍在运行 |
+| `flutter clean` | 修改核心逻辑后仅重启不够，需 `flutter clean && flutter pub get` 清除编译缓存 |
 
 ### Phase 3 + Phase 4 验证方法
 
@@ -635,15 +678,21 @@ Phase 4（全链路集成测试）已通过手动验证。以下是完整的验�
 # 0. 前提：Docker 已启动（PostgreSQL + Redis）
 docker compose -f docker/docker-compose.yaml up -d
 
-# 1. 启动服务端
+# 1. 启动服务端（NestJS，端口 3008）
 pnpm --filter server dev
 
-# 2. 启动桌面端
+# 2. 启动桌面端（Electron）
 pnpm --filter desktop dev
 
-# 3. 启动移动端（Flutter Web）
-D:\flutter\bin\flutter.bat run -d web-server --web-port 8080
-# 浏览器打开 http://localhost:8080
+# 3. 启动移动端（Flutter 自带 Web 开发服务器，非 Docker/pnpm）
+#    flutter run 会编译 Dart→JS 并启动一个轻量 HTTP 服务器
+#    端口可自选，默认随机分配
+D:\flutter\bin\flutter.bat run -d web-server --web-port 8081
+# 浏览器打开 http://localhost:8081
+
+# 注意：修改 Flutter 代码后需要：
+#   - 简单改动：浏览器 Ctrl+Shift+R 硬刷新
+#   - 结构性改动：停止 flutter run → flutter clean → flutter pub get → 重新 flutter run
 
 # 4. 桌面端登录：test@linkingchat.com / Test1234x
 # 5. 移动端登录：test@linkingchat.com / Test1234x
@@ -661,6 +710,8 @@ D:\flutter\bin\flutter.bat run -d web-server --web-port 8080
 | 6 | 命令结果展示 | 同上 | 显示退出码、耗时、完整输出 | ✅ |
 | 7 | 登出 | 点击 Logout | 跳转回登录页 | ✅ |
 | 8 | 未登录重定向 | 刷新浏览器 | 自动跳转登录页（非 401 白屏） | ✅ |
+| 9 | 危险命令拦截 | 输入 `rm -rf /` → 发送 | 即时显示 "Command blocked by safety filter" | ✅ |
+| 10 | 错误命令 | 输入不存在的命令 → 发送 | 显示 Error + 错误信息 + 退出码 | ✅ |
 
 ### 建议追加测试（手动）
 
