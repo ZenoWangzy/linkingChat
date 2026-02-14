@@ -1,0 +1,16 @@
+appId: com.linkingchat.desktop
+productName: LinkingChat
+directories:
+  buildResources: build
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.*'
+  - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+win:
+  target: nsis
+mac:
+  target: dmg
+linux:
+  target: AppImage

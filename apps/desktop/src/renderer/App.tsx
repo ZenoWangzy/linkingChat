@@ -1,25 +1,22 @@
+import { useState, useEffect } from 'react';
+import { Login } from './pages/Login';
+import { Dashboard } from './pages/Dashboard';
+import './styles/global.css';
+
 function App() {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '100vh',
-        fontFamily: 'system-ui, sans-serif',
-        backgroundColor: '#1a1a2e',
-        color: '#e0e0e0',
-      }}
-    >
-      <h1 style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>
-        LinkingChat Desktop
-      </h1>
-      <p style={{ color: '#888', fontSize: '0.9rem' }}>
-        Sprint 0 — Electron skeleton ready
-      </p>
-    </div>
-  );
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    window.electronAPI.getToken().then((token: string | null) => {
+      if (token) setIsLoggedIn(true);
+    });
+  }, []);
+
+  if (!isLoggedIn) {
+    return <Login onLoginSuccess={() => setIsLoggedIn(true)} />;
+  }
+
+  return <Dashboard onLogout={() => setIsLoggedIn(false)} />;
 }
 
 export default App;

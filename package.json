@@ -9,8 +9,8 @@
     "test": "turbo run test",
     "lint": "turbo run lint",
     "type-check": "turbo run type-check",
-    "docker:up": "docker compose -f docker/docker-compose.yaml up -d",
-    "docker:down": "docker compose -f docker/docker-compose.yaml down",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
     "db:migrate": "pnpm --filter @linkingchat/server prisma migrate dev",
     "db:seed": "pnpm --filter @linkingchat/server prisma db seed"
   },

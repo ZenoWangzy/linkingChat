@@ -1,0 +1,266 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: #1a1a2e;
+  color: #e0e0e0;
+  overflow-x: hidden;
+}
+
+/* Login */
+.login-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  padding: 2rem;
+}
+
+.login-container h1 {
+  font-size: 2rem;
+  margin-bottom: 0.25rem;
+  color: #fff;
+}
+
+.login-subtitle {
+  color: #888;
+  font-size: 0.9rem;
+  margin-bottom: 2rem;
+}
+
+.login-container form {
+  width: 100%;
+  max-width: 320px;
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.85rem;
+  color: #aaa;
+  margin-bottom: 0.25rem;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #16213e;
+  color: #e0e0e0;
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.form-group input:focus {
+  border-color: #4361ee;
+}
+
+.error-message {
+  color: #f44336;
+  font-size: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
+.btn-primary {
+  width: 100%;
+  padding: 0.65rem;
+  border: none;
+  border-radius: 6px;
+  background: #4361ee;
+  color: #fff;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-primary:hover {
+  background: #3a56d4;
+}
+
+.btn-primary:disabled {
+  background: #555;
+  cursor: not-allowed;
+}
+
+/* Dashboard */
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.25rem;
+  background: #16213e;
+  border-bottom: 1px solid #333;
+}
+
+.dashboard-header h1 {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.btn-secondary {
+  padding: 0.35rem 0.75rem;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background: transparent;
+  color: #ccc;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  background: #333;
+}
+
+/* Connection Status */
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.75rem 1.25rem;
+  background: #0f3460;
+  border-bottom: 1px solid #333;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.device-info {
+  display: flex;
+  gap: 1.25rem;
+  font-size: 0.8rem;
+  color: #aaa;
+}
+
+.device-info code {
+  font-size: 0.75rem;
+  color: #888;
+}
+
+/* Command Log */
+.command-log {
+  flex: 1;
+  padding: 1rem 1.25rem;
+  overflow-y: auto;
+}
+
+.command-log h2 {
+  font-size: 1rem;
+  margin-bottom: 0.75rem;
+  color: #ccc;
+}
+
+.empty-state {
+  color: #666;
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 3rem 0;
+}
+
+.log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.log-entry {
+  background: #16213e;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  border-left: 3px solid #555;
+}
+
+.log-entry.status-success {
+  border-left-color: #4caf50;
+}
+
+.log-entry.status-error {
+  border-left-color: #f44336;
+}
+
+.log-entry.status-running {
+  border-left-color: #ff9800;
+}
+
+.log-entry.status-blocked {
+  border-left-color: #ff5722;
+}
+
+.log-entry.status-pending {
+  border-left-color: #2196f3;
+}
+
+.log-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.log-status {
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: #888;
+}
+
+.log-action {
+  font-size: 0.9rem;
+  color: #e0e0e0;
+  flex: 1;
+}
+
+.log-time {
+  font-size: 0.75rem;
+  color: #888;
+}
+
+.log-output {
+  background: #0d1b2a;
+  border-radius: 4px;
+  padding: 0.5rem;
+  font-size: 0.8rem;
+  color: #aaa;
+  max-height: 200px;
+  overflow-y: auto;
+  margin: 0.35rem 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.log-meta {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.7rem;
+  color: #666;
+}
