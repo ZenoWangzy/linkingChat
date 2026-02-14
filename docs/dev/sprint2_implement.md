@@ -1,37 +1,64 @@
 # Sprint 2：社交基础 + Bot 框架
 
-> **目标**：从"设备遥控器"进化为"能聊天的遥控器" — 完成好友系统、1 对 1 聊天、在线状态、已读回执，以及多 Bot 框架 + OpenClaw 集成
+> **目标**：从"设备遥控器"进化为"能聊天的遥控器" — 完成好友系统、1 对 1 聊天、在线状态、已读回执，以及多 Bot 框架（Phase 0-7）
 >
 > **前置条件**：[Sprint 1](./sprint1_implement.md) 已完成（全链路 PoC：手机 → 云 → 桌面 → 手机）
 >
 > **不包含**：群聊、AI 三模式、文件/图片/语音消息、推送通知、消息搜索、生产部署
 >
+> **延迟到后续 Sprint**：OpenClaw Node 集成（原 Phase 8）、Supervisor 通知汇总（原 Phase 9）— Sprint 1 的 child_process.exec() 继续工作
+>
 > **参考**：[database-schema.md](../dev-plan/database-schema.md) | [websocket-protocol.md](../dev-plan/websocket-protocol.md) | [reference-architecture-guide.md](../dev-plan/reference-architecture-guide.md)
 
 ---
 
-## 并行策略
+## 范围调整说明
 
-Sprint 2 分为两条并行开发线，由不同开发者同时推进：
+原计划 10 个 Phase（0-9），实际执行 **Phase 0-7**，延迟 Phase 8-9：
+
+| Phase | 状态 | 原因 |
+|-------|------|------|
+| Phase 0-4（社交基础） | ✅ 执行 | 核心价值，Sprint 3 AI 功能的前置依赖 |
+| Phase 5-7（Bot 框架） | ✅ 执行 | Bot CRUD + 自动创建 + UI，轻量且给用户"开箱即用"体验 |
+| Phase 8（OpenClaw 集成） | ⏭ 延迟 | Sprint 1 的 child_process.exec() 已可用，替换为独立任务 |
+| Phase 9（Supervisor 通知） | ⏭ 延迟 | 依赖完整 Bot 执行管线，需 AI 模块配合 |
+
+---
+
+## 实施策略
+
+逐 Phase 推进，每个 Phase 实现 Server + Flutter + Desktop 全端：
 
 ```
-线 A — 社交基础（后端 + 全端）               线 B — Bot 框架（后端 + 桌面端）
-  Phase 0: Schema 扩展                         Phase 5: Bot Model + CRUD
-  Phase 1: 好友系统                             Phase 6: 注册自动创建 Bot
-  Phase 2: 1 对 1 聊天                          Phase 7: Bot 聊天 UI
-  Phase 3: 在线状态                             Phase 8: OpenClaw Node 集成
-  Phase 4: 已读回执                             Phase 9: Supervisor 通知汇总
-
-       ↓ Phase 2 + Phase 5 + Phase 6 完成后 Phase 7 可开始 ↓
+Phase 0: Schema 扩展（单次 migration 创建所有社交 + Bot 表）
+  ↓
+Phase 1: 好友系统（REST + WS + Flutter + Desktop）
+  ↓
+Phase 2: 1 对 1 聊天（REST + ChatGateway + Flutter + Desktop）
+  ↓
+Phase 3: 在线状态（Redis presence + WS 广播）
+  ↓
+Phase 4: 已读回执（游标追踪 + 双勾 UI）
+  ↓
+Phase 5: Bot Model + CRUD（REST API + Zod 验证）
+  ↓
+Phase 6: 注册自动创建 Bot（Supervisor + Coding Bot + 欢迎消息）
+  ↓
+Phase 7: Bot 聊天 UI（置顶 + 通知卡片渲染）
 ```
 
-### 人员分配建议
+### 详细实施文档
 
-| 开发者 | 负责 | 说明 |
-|--------|------|------|
-| A（后端） | Phase 0 → Phase 1 → Phase 2 → Phase 3 → Phase 4 | 社交基础全链路 |
-| B（桌面端 / 全栈） | Phase 5 → Phase 6 → Phase 7 → Phase 8 → Phase 9 | Bot 框架 + OpenClaw |
-| C（移动端） | 跟进 Phase 1-4 的 Flutter UI | 好友列表、聊天界面、状态显示 |
+| Phase | 文档 | 任务数 |
+|-------|------|--------|
+| Phase 0 | [sprint2_phase0.md](./sprint2_phase0.md) | 11 |
+| Phase 1 | [sprint2_phase1.md](./sprint2_phase1.md) | 10 |
+| Phase 2 | [sprint2_phase2.md](./sprint2_phase2.md) | 12 |
+| Phase 3 | [sprint2_phase3.md](./sprint2_phase3.md) | 7 |
+| Phase 4 | [sprint2_phase4.md](./sprint2_phase4.md) | 5 |
+| Phase 5 | [sprint2_phase5.md](./sprint2_phase5.md) | 6 |
+| Phase 6 | [sprint2_phase6.md](./sprint2_phase6.md) | 5 |
+| Phase 7 | [sprint2_phase7.md](./sprint2_phase7.md) | 7 |
 
 ---
 
@@ -640,13 +667,11 @@ Coding Bot 执行完命令:
 
 | 检查点 | 验收内容 | 对应 Phase |
 |--------|---------|-----------|
-| **M1** | Schema 扩展完成：所有社交表建立，seed 数据可插入 | Phase 0 |
+| **M1** | Schema 扩展完成：所有社交 + Bot 表建立，seed 数据可插入 | Phase 0 |
 | **M2** | 好友系统可用：请求 → 接受 → 列表 → WS 通知全通 | Phase 1 |
 | **M3** | 聊天可用：DM 收发 + 分页 + 实时推送 + 输入状态 | Phase 2 |
 | **M4** | 状态 + 已读：好友上下线实时显示 + 消息双勾 | Phase 3-4 |
 | **M5** | Bot 可用：注册后自动创建 Bot + Bot 聊天框 + 欢迎消息 | Phase 5-7 |
-| **M6** | OpenClaw 集成：命令通过 OpenClaw 执行 + 回退逻辑 | Phase 8 |
-| **M7** | 通知汇总：Bot 事件聚合到 Supervisor 聊天流 | Phase 9 |
 
 ---
 
@@ -654,6 +679,8 @@ Coding Bot 执行完命令:
 
 | 功能 | 原因 | 何时做 |
 |------|------|--------|
+| OpenClaw Node 集成 | Sprint 1 的 child_process.exec() 已可用 | 独立任务或 Sprint 3 |
+| Supervisor 通知汇总 | 需要 AI 模块 + 完整 Bot 执行管线 | Sprint 3 |
 | 群聊 / 频道 | 社交基础先稳固 1 对 1 | Sprint 3 |
 | AI 三模式 (Draft / Whisper / Predictive) | 需要先有稳定的消息系统 | Sprint 3 |
 | LLM Router | AI 模块前置依赖 | Sprint 3 |
