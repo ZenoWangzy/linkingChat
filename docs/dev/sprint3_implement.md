@@ -81,6 +81,64 @@
 
 ---
 
+## 双人协作规范
+
+### Git 分支策略
+
+```
+main
+ ├── feat/sprint3-ai-phase0        ← 开发者 A 从 main 切出
+ │    └── Phase 0 → 1 → 2 → 3 → 4 逐步提交
+ │
+ └── feat/sprint3-openclaw-phase5   ← 开发者 B 从 main 切出
+      └── Phase 5 → 6 → 7 → 8 → 9 逐步提交
+```
+
+- 两条线在**独立分支**上工作，不直接往 main 推代码
+- 每个 Phase 完成后提交（不必等整条线全部完成）
+- 一条线完成阶段性工作后 merge 回 main，另一条线 `git rebase main` 后继续
+
+### 共享文件冲突风险
+
+以下文件/目录两条线都可能修改，需要注意协调：
+
+| 共享区域 | 线 A 改动 | 线 B 改动 | 协调方式 |
+|----------|-----------|-----------|---------|
+| `packages/ws-protocol/` | 加 AI 相关 WS 事件类型 | 加 OpenClaw 相关 WS 事件类型 | commit message 加 `[SHARED]` 标记，先合入的优先 |
+| `packages/shared/` | 加 LLM 相关类型定义 | 加 OpenClaw 相关类型定义 | 同上 |
+| `apps/server/src/bots/` | Phase 4 加 Bot 间消息路由 | Phase 6 扩展 Supervisor 通知 | 改动文件不同但模块相同，merge 时检查 module imports |
+| `apps/server/src/app.module.ts` | 注册 AiModule | 注册 OpenClaw 相关 Module | 合并时手动处理 imports 数组 |
+| `.env.example` | 加 `DEEPSEEK_API_KEY`, `KIMI_API_KEY` | 加 OpenClaw 相关配置 | 追加即可，不冲突 |
+
+> **规则**：凡修改 `packages/` 下共享包的 commit，message 必须包含 `[SHARED]` 标记，例如：
+> `feat(ws-protocol): [SHARED] add AI whisper event types`
+
+### 推荐合并顺序
+
+```
+时间 ──────────────────────────────────────────────────────────────►
+
+开发者 A（线 A）：
+  ①  Phase 0 (LLM Router)  ──merge→ main
+  ③  Phase 1+2+3 (Whisper + Draft + Predictive) ──merge→ main
+  ⑤  Phase 4 (Bot 间通信) ──merge→ main
+
+开发者 B（线 B）：
+  ②  Phase 5+6 (OpenClaw + Supervisor) ──merge→ main
+  ④  rebase main → Phase 7+8 (@Bot 路由 + Profile) ──merge→ main
+  ⑤  Phase 9 (群权限增强，可选) ──merge→ main
+```
+
+**关键依赖**：Phase 7 (@Bot 群聊路由) 需要 Phase 0 (LLM Router) 和 Phase 5 (OpenClaw) 都已合入 main。所以 B 应按 **5→6→8→7→9** 顺序做（先跳过 7，做完 8 后等 A 的 Phase 0 合入再回头做 7）。
+
+### 每日同步检查
+
+- 各自 `git fetch origin main` 检查对方是否有新合入
+- 如果 main 有更新，及时 `git rebase main` 到自己的分支
+- 遇到 `[SHARED]` 包冲突时优先沟通，不要盲目 resolve
+
+---
+
 ## 线 A — AI 模块
 
 ### Phase 0: LLM Router 服务
