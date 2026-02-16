@@ -12,6 +12,7 @@ import { ConversesModule } from './converses/converses.module';
 import { MessagesModule } from './messages/messages.module';
 import { UsersModule } from './users/users.module';
 import { BotsModule } from './bots/bots.module';
+import { AiModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { BotsModule } from './bots/bots.module';
     MessagesModule,
     UsersModule,
     BotsModule,
+    AiModule,
   ],
   controllers: [AppController],
   providers: [AppService],
