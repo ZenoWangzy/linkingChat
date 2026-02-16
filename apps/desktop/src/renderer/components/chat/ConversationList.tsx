@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChatStore } from '../../stores/chatStore';
+import { CreateGroupDialog } from './CreateGroupDialog';
 import type { ConverseResponse } from '@linkingchat/ws-protocol';
 
 export function ConversationList() {
   const navigate = useNavigate();
   const { converses, activeConverseId, markConverseRead, currentUserId } = useChatStore();
   const [search, setSearch] = useState('');
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
 
   // Filter and sort
   const filtered = converses
@@ -29,6 +31,18 @@ export function ConversationList() {
     <div className="conversation-list">
       <div className="conversation-list-header">
         <h2>Chats</h2>
+        <button
+          className="create-group-btn"
+          onClick={() => setShowCreateGroup(true)}
+          title="Create Group"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <line x1="23" y1="11" x2="17" y2="11" />
+            <line x1="20" y1="8" x2="20" y2="14" />
+          </svg>
+        </button>
       </div>
       <div className="conversation-search">
         <input
@@ -77,6 +91,10 @@ export function ConversationList() {
           </div>
         ))}
       </div>
+      <CreateGroupDialog
+        open={showCreateGroup}
+        onClose={() => setShowCreateGroup(false)}
+      />
     </div>
   );
 }

@@ -1,17 +1,29 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useChatStore } from '../stores/chatStore';
 import { ConversationList } from '../components/chat/ConversationList';
 import { ChatThread } from '../components/chat/ChatThread';
 import { MessageInput } from '../components/chat/MessageInput';
+import { GroupPanel } from '../components/chat/GroupPanel';
 
 export function ChatPage() {
   const { converseId } = useParams<{ converseId?: string }>();
   const { setActiveConverse } = useChatStore();
+  const [showGroupPanel, setShowGroupPanel] = useState(false);
+
+  const converse = useChatStore((s) =>
+    converseId ? s.converses.find((c) => c.id === converseId) : undefined,
+  );
+  const isGroup = converse?.type === 'GROUP';
 
   useEffect(() => {
     setActiveConverse(converseId ?? null);
   }, [converseId, setActiveConverse]);
+
+  // Close group panel when switching conversations
+  useEffect(() => {
+    setShowGroupPanel(false);
+  }, [converseId]);
 
   // Fetch converses on mount
   useEffect(() => {
@@ -42,7 +54,10 @@ export function ChatPage() {
       <div className="chat-main">
         {converseId ? (
           <>
-            <ChatThread converseId={converseId} />
+            <ChatThread
+              converseId={converseId}
+              onGroupInfoClick={isGroup ? () => setShowGroupPanel((v) => !v) : undefined}
+            />
             <MessageInput converseId={converseId} />
           </>
         ) : (
@@ -56,6 +71,14 @@ export function ChatPage() {
           </div>
         )}
       </div>
+      {showGroupPanel && converseId && isGroup && (
+        <div className="chat-right-panel">
+          <GroupPanel
+            converseId={converseId}
+            onClose={() => setShowGroupPanel(false)}
+          />
+        </div>
+      )}
     </div>
   );
 }
