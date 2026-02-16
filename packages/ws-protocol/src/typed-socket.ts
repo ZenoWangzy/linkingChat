@@ -24,6 +24,19 @@ import type {
   GroupMemberRemovedPayload,
   GroupMemberRoleUpdatedPayload,
 } from './payloads/chat.payloads';
+import type {
+  WhisperSuggestionsPayload,
+  WhisperRequestPayload,
+  WhisperAcceptPayload,
+  DraftCreatedPayload,
+  DraftApprovePayload,
+  DraftRejectPayload,
+  DraftEditPayload,
+  DraftExpiredPayload,
+  PredictiveActionPayload,
+  PredictiveExecutePayload,
+  PredictiveDismissPayload,
+} from './payloads/ai.payloads';
 
 export interface SocketData {
   userId: string;
@@ -66,6 +79,36 @@ export interface ClientToServerEvents {
     ack: (res: WsResponse) => void,
   ) => void;
   'presence:update': (data: PresenceUpdatePayload) => void;
+
+  // AI events (Sprint 3)
+  'ai:whisper:request': (
+    data: WhisperRequestPayload,
+    ack: (res: WsResponse) => void,
+  ) => void;
+  'ai:whisper:accept': (
+    data: WhisperAcceptPayload,
+    ack: (res: WsResponse) => void,
+  ) => void;
+  'ai:draft:approve': (
+    data: DraftApprovePayload,
+    ack: (res: WsResponse) => void,
+  ) => void;
+  'ai:draft:reject': (
+    data: DraftRejectPayload,
+    ack: (res: WsResponse) => void,
+  ) => void;
+  'ai:draft:edit': (
+    data: DraftEditPayload,
+    ack: (res: WsResponse) => void,
+  ) => void;
+  'ai:predictive:execute': (
+    data: PredictiveExecutePayload,
+    ack: (res: WsResponse) => void,
+  ) => void;
+  'ai:predictive:dismiss': (
+    data: PredictiveDismissPayload,
+    ack: (res: WsResponse) => void,
+  ) => void;
 }
 
 export interface ServerToClientEvents {
@@ -104,6 +147,12 @@ export interface ServerToClientEvents {
   'group:member:added': (data: GroupMemberAddedPayload) => void;
   'group:member:removed': (data: GroupMemberRemovedPayload) => void;
   'group:member:role:updated': (data: GroupMemberRoleUpdatedPayload) => void;
+
+  // AI events (Sprint 3)
+  'ai:whisper:suggestions': (data: WhisperSuggestionsPayload) => void;
+  'ai:draft:created': (data: DraftCreatedPayload) => void;
+  'ai:draft:expired': (data: DraftExpiredPayload) => void;
+  'ai:predictive:action': (data: PredictiveActionPayload) => void;
 }
 
 // These types require socket.io as a peer dependency.

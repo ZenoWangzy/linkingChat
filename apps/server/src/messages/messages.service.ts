@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { BroadcastService } from '../gateway/broadcast.service';
 import { ConversesService } from '../converses/converses.service';
+import { WhisperService } from '../ai/services/whisper.service';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { UpdateMessageDto } from './dto/update-message.dto';
 
@@ -26,6 +27,7 @@ export class MessagesService {
     private readonly prisma: PrismaService,
     private readonly broadcastService: BroadcastService,
     private readonly conversesService: ConversesService,
+    private readonly whisperService: WhisperService,
   ) {}
 
   /**
@@ -125,6 +127,15 @@ export class MessagesService {
     this.detectBotRecipient(userId, dto.converseId, message).catch((err) =>
       this.logger.error(`detectBotRecipient failed: ${err.message}`, err.stack),
     );
+
+    // 8. 检测 @ai 触发词（fire-and-forget）
+    if (this.whisperService.isWhisperTrigger(message.content)) {
+      this.whisperService
+        .handleWhisperTrigger(userId, dto.converseId, message.id)
+        .catch((err) =>
+          this.logger.error(`whisper trigger failed: ${err.message}`, err.stack),
+        );
+    }
 
     return message;
   }

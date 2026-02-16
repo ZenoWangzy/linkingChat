@@ -44,3 +44,22 @@ export const CHAT_EVENTS = {
   GROUP_MEMBER_REMOVED:       'group:member:removed',
   GROUP_MEMBER_ROLE_UPDATED:  'group:member:role:updated',
 } as const;
+
+export const AI_EVENTS = {
+  // Whisper — @ai 建议 (Sprint 3)
+  WHISPER_SUGGESTIONS: 'ai:whisper:suggestions',
+  WHISPER_REQUEST:     'ai:whisper:request',
+  WHISPER_ACCEPT:      'ai:whisper:accept',
+
+  // Draft & Verify — 草稿确认 (Sprint 3)
+  DRAFT_CREATED:  'ai:draft:created',
+  DRAFT_APPROVE:  'ai:draft:approve',
+  DRAFT_REJECT:   'ai:draft:reject',
+  DRAFT_EDIT:     'ai:draft:edit',
+  DRAFT_EXPIRED:  'ai:draft:expired',
+
+  // Predictive Actions — 预测执行 (Sprint 3)
+  PREDICTIVE_ACTION:  'ai:predictive:action',
+  PREDICTIVE_EXECUTE: 'ai:predictive:execute',
+  PREDICTIVE_DISMISS: 'ai:predictive:dismiss',
+} as const;

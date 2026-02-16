@@ -57,6 +57,27 @@ enum BotType {
   CUSTOM
 }
 
+// ========== Sprint 3 新增枚举 ==========
+
+enum AiSuggestionType {
+  WHISPER
+  PREDICTIVE
+}
+
+enum AiSuggestionStatus {
+  PENDING
+  ACCEPTED
+  DISMISSED
+  EXPIRED
+}
+
+enum DraftStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
 // ========== Models ==========
 
 model User {
@@ -96,6 +117,10 @@ model User {
   // Sprint 2 新增关系 — Bot
   ownedBots Bot[] @relation("BotOwner")
   botUser   Bot?  @relation("BotUser")
+
+  // Sprint 3 新增关系 — AI
+  aiSuggestions AiSuggestion[]
+  aiDrafts      AiDraft[]
 
   @@map("users")
 }
@@ -206,7 +231,9 @@ model Converse {
   members  ConverseMember[]
   messages Message[]
 
-  @@map("converses")
+  // Sprint 3 新增关系
+  aiSuggestions AiSuggestion[]
+  aiDrafts      AiDraft[]
 }
 
 enum GroupRole {
@@ -290,4 +317,48 @@ model Bot {
 
   @@index([ownerId])
   @@map("bots")
+}
+
+// ========== Sprint 3 新增 Models ==========
+
+model AiSuggestion {
+  id            String              @id @default(cuid())
+  type          AiSuggestionType
+  status        AiSuggestionStatus  @default(PENDING)
+  userId        String
+  converseId    String
+  messageId     String?
+  suggestions   Json                // { primary: string, alternatives: string[] }
+  selectedIndex Int?
+  metadata      Json?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id])
+  converse Converse @relation(fields: [converseId], references: [id])
+
+  @@index([userId, createdAt])
+  @@map("ai_suggestions")
+}
+
+model AiDraft {
+  id           String      @id @default(cuid())
+  status       DraftStatus @default(PENDING)
+  userId       String
+  converseId   String
+  botId        String?
+  draftType    String      // 'message' | 'command'
+  draftContent Json        // { content: string, action?: string, args?: any }
+  editedContent Json?
+  rejectReason String?
+  expiresAt    DateTime
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id])
+  converse Converse @relation(fields: [converseId], references: [id])
+
+  @@index([userId, status])
+  @@index([expiresAt])
+  @@map("ai_drafts")
 }

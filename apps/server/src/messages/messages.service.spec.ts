@@ -3,6 +3,7 @@ import { MessagesService } from './messages.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { BroadcastService } from '../gateway/broadcast.service';
 import { ConversesService } from '../converses/converses.service';
+import { WhisperService } from '../ai/services/whisper.service';
 import {
   NotFoundException,
   ForbiddenException,
@@ -47,6 +48,11 @@ describe('MessagesService', () => {
     getMemberIds: jest.fn(),
   };
 
+  const mockWhisper = {
+    isWhisperTrigger: jest.fn().mockReturnValue(false),
+    handleWhisperTrigger: jest.fn().mockResolvedValue(undefined),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -54,6 +60,7 @@ describe('MessagesService', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: BroadcastService, useValue: mockBroadcast },
         { provide: ConversesService, useValue: mockConverses },
+        { provide: WhisperService, useValue: mockWhisper },
       ],
     }).compile();
 
