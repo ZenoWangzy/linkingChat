@@ -83,20 +83,84 @@
 
 ## 双人协作规范
 
+> 两人都在 `upstream`（ZenoWangzy/linkingChat）上用分支，不走 Fork + PR 流程。
+
 ### Git 分支策略
 
 ```
-main
- ├── feat/sprint3-ai-phase0        ← 开发者 A 从 main 切出
- │    └── Phase 0 → 1 → 2 → 3 → 4 逐步提交
- │
- └── feat/sprint3-openclaw-phase5   ← 开发者 B 从 main 切出
-      └── Phase 5 → 6 → 7 → 8 → 9 逐步提交
+ZenoWangzy/linkingChat
+  main                              ← 稳定主线，不直接推代码
+  feat/sprint3-ai                   ← 开发者 A 的工作分支
+  feat/sprint3-openclaw             ← 开发者 B 的工作分支
 ```
 
 - 两条线在**独立分支**上工作，不直接往 main 推代码
 - 每个 Phase 完成后提交（不必等整条线全部完成）
-- 一条线完成阶段性工作后 merge 回 main，另一条线 `git rebase main` 后继续
+- 一条线完成阶段性工作后 merge 回 main，另一条线 `git rebase upstream/main` 后继续
+- 合入 main 后删除远程分支，基于最新 main 开新分支继续下一批 Phase
+
+### Git 操作速查
+
+**开工（各自做一次）：**
+
+```bash
+git fetch upstream
+git checkout -b feat/sprint3-ai upstream/main         # 开发者 A
+git checkout -b feat/sprint3-openclaw upstream/main   # 开发者 B
+```
+
+**日常提交 + 推送：**
+
+```bash
+git add <files>
+git commit -m "feat(ai): implement LLM Router with DeepSeek provider"
+git push upstream feat/sprint3-ai                     # A 推到 upstream 自己的分支
+git push upstream feat/sprint3-openclaw               # B 推到 upstream 自己的分支
+```
+
+**同步对方的合入（main 有更新时）：**
+
+```bash
+git fetch upstream
+git rebase upstream/main
+# 有冲突就解决，然后
+git push upstream feat/sprint3-ai --force-with-lease
+```
+
+**一个阶段做完，合入 main：**
+
+```bash
+# 合入前必须通过：
+pnpm test           # 所有测试通过
+pnpm build          # 编译不报错
+
+# 合入操作：
+git checkout main
+git pull upstream main
+git merge feat/sprint3-ai
+git push upstream main
+
+# 清理远程分支：
+git push upstream --delete feat/sprint3-ai
+# 基于最新 main 开新分支继续：
+git checkout -b feat/sprint3-ai-phase1 upstream/main
+```
+
+### Commit 规范
+
+延续 conventional commits 风格，用 scope 区分模块：
+
+```
+feat(ai): implement LLM Router service              # 线 A 新功能
+feat(openclaw): integrate OpenClaw Node SDK          # 线 B 新功能
+feat(ws-protocol): [SHARED] add whisper events       # 改共享包必须加 [SHARED]
+fix(ai): handle DeepSeek timeout gracefully          # 修 bug
+test(ai): add whisper service unit tests             # 测试
+```
+
+常用 scope：`ai`、`openclaw`、`bots`、`mobile`、`desktop`、`ws-protocol`、`shared`
+
+> **规则**：凡修改 `packages/` 下共享包的 commit，message 必须包含 `[SHARED]` 标记。
 
 ### 共享文件冲突风险
 
@@ -104,14 +168,11 @@ main
 
 | 共享区域 | 线 A 改动 | 线 B 改动 | 协调方式 |
 |----------|-----------|-----------|---------|
-| `packages/ws-protocol/` | 加 AI 相关 WS 事件类型 | 加 OpenClaw 相关 WS 事件类型 | commit message 加 `[SHARED]` 标记，先合入的优先 |
+| `packages/ws-protocol/` | 加 AI 相关 WS 事件类型 | 加 OpenClaw 相关 WS 事件类型 | `[SHARED]` 标记，先合入的优先 |
 | `packages/shared/` | 加 LLM 相关类型定义 | 加 OpenClaw 相关类型定义 | 同上 |
 | `apps/server/src/bots/` | Phase 4 加 Bot 间消息路由 | Phase 6 扩展 Supervisor 通知 | 改动文件不同但模块相同，merge 时检查 module imports |
 | `apps/server/src/app.module.ts` | 注册 AiModule | 注册 OpenClaw 相关 Module | 合并时手动处理 imports 数组 |
 | `.env.example` | 加 `DEEPSEEK_API_KEY`, `KIMI_API_KEY` | 加 OpenClaw 相关配置 | 追加即可，不冲突 |
-
-> **规则**：凡修改 `packages/` 下共享包的 commit，message 必须包含 `[SHARED]` 标记，例如：
-> `feat(ws-protocol): [SHARED] add AI whisper event types`
 
 ### 推荐合并顺序
 
@@ -133,8 +194,8 @@ main
 
 ### 每日同步检查
 
-- 各自 `git fetch origin main` 检查对方是否有新合入
-- 如果 main 有更新，及时 `git rebase main` 到自己的分支
+- 各自 `git fetch upstream main` 检查对方是否有新合入
+- 如果 main 有更新，及时 `git rebase upstream/main` 到自己的分支
 - 遇到 `[SHARED]` 包冲突时优先沟通，不要盲目 resolve
 
 ---
