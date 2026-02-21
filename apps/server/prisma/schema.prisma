@@ -234,6 +234,8 @@ model Converse {
   // Sprint 3 新增关系
   aiSuggestions AiSuggestion[]
   aiDrafts      AiDraft[]
+
+  @@map("converses")
 }
 
 enum GroupRole {

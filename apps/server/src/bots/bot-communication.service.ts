@@ -296,7 +296,14 @@ export class BotCommunicationService {
     bots: Array<{ id: string; name: string; description: string | null; type: string }>,
   ): SupervisorRouteResult | null {
     try {
-      const parsed = JSON.parse(content);
+      // Strip markdown code blocks if present (LLMs often wrap JSON in ```json...```)
+      let cleaned = content.trim();
+      const codeBlockMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (codeBlockMatch) {
+        cleaned = codeBlockMatch[1].trim();
+      }
+
+      const parsed = JSON.parse(cleaned);
       const botName = parsed.botName || parsed.bot || parsed.recommended;
 
       if (!botName) return null;

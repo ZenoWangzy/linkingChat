@@ -437,5 +437,19 @@ describe('BotCommunicationService', () => {
 
       expect(result?.confidence).toBe(0.5);
     });
+
+    it('should strip markdown code blocks from LLM response', () => {
+      const result = service.parseRouteResult(
+        '```json\n{"botName": "Coding Bot", "confidence": 0.9, "reason": "执行脚本"}\n```',
+        bots,
+      );
+
+      expect(result).toEqual({
+        recommendedBotId: 'bot-1',
+        recommendedBotName: 'Coding Bot',
+        confidence: 0.9,
+        reason: '执行脚本',
+      });
+    });
   });
 });
