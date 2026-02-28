@@ -14,7 +14,16 @@ LinkingChat (codename: Ghost Mate) has completed **Sprint 0–2**. The platform 
 - `pnpm dev:mobile` — Flutter mobile app (full chat UI, friends, groups, device control)
 - `pnpm build` — All 4 packages compile (server, desktop, shared, ws-protocol)
 - `pnpm test` — 7 suites, 102 tests passing (auth, friends, messages, presence, converses, bots, bot-init)
+- `pnpm lint` / `pnpm type-check` — Code quality checks
+- `pnpm db:migrate` / `pnpm db:seed` — Prisma migrations and seeding
 - Prisma schema: 12 models (User, Device, Command, RefreshToken, FriendRequest, Friendship, UserBlock, Converse, ConverseMember, Message, Attachment, Bot)
+
+### Environment Setup
+Required `.env` in `apps/server/`:
+- `DATABASE_URL` — PostgreSQL connection (e.g., `postgresql://user:pass@localhost:5440/linkingchat`)
+- `REDIS_URL` — Redis connection (e.g., `redis://localhost:6387`)
+- `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY` — RS256 key pair (base64 encoded)
+- `DEEPSEEK_API_KEY` / `KIMI_API_KEY` — LLM providers (Sprint 3+)
 
 ### Sprint completion:
 - **Sprint 0** ✅ — Infrastructure setup (monorepo, Docker, Prisma, CI)
@@ -24,7 +33,7 @@ LinkingChat (codename: Ghost Mate) has completed **Sprint 0–2**. The platform 
   - **Phase 5** ✅ — OpenClaw Gateway 云端集成已完成 (2026-02-28)
 
 ### Sprint 2 deferred to Sprint 3:
-- OpenClaw Gateway integration (Sprint 3 Phase 5 ✅ 完成)
+- ~~OpenClaw Gateway integration~~ (Phase 5 ✅ 完成)
 - Supervisor notification aggregation (Sprint 3 Phase 6)
 
 Technical decisions are in `docs/decisions/decision-checklist.md` and `docs/decisions/tech-decisions-v2.md`.
