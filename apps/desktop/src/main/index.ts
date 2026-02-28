@@ -2,6 +2,7 @@ import { app, BrowserWindow } from 'electron';
 import { join } from 'path';
 import { registerAuthIpc } from './ipc/auth.ipc';
 import { registerDeviceIpc } from './ipc/device.ipc';
+import { registerOpenClawIpc, connectToGateway } from './ipc/openclaw.ipc';
 import { WsClientService } from './services/ws-client.service';
 import { AuthStore } from './services/auth-store.service';
 
@@ -31,6 +32,7 @@ function createWindow(): void {
 app.whenReady().then(() => {
   registerAuthIpc(wsClient);
   registerDeviceIpc(wsClient);
+  registerOpenClawIpc();
 
   createWindow();
 
@@ -38,6 +40,14 @@ app.whenReady().then(() => {
   const tokens = AuthStore.load();
   if (tokens) {
     wsClient.connect();
+    // Connect to OpenClaw Gateway after WebSocket is ready
+    connectToGateway().then((status) => {
+      if (status.connected) {
+        console.log('[Main] OpenClaw Gateway connected');
+      } else {
+        console.warn('[Main] OpenClaw Gateway not available:', status.error);
+      }
+    });
   }
 
   app.on('activate', () => {
@@ -47,5 +57,9 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   wsClient.disconnect();
+  // Disconnect from OpenClaw Gateway
+  import('./ipc/openclaw.ipc').then(({ disconnectFromGateway }) => {
+    disconnectFromGateway();
+  });
   if (process.platform !== 'darwin') app.quit();
 });

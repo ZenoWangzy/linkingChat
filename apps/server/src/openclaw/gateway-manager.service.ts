@@ -1,7 +1,9 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
 import { spawn, ChildProcess } from 'child_process';
 import * as path from 'path';
+import * as crypto from 'crypto';
 
 /**
  * 用户 Gateway 实例信息
@@ -12,6 +14,7 @@ interface UserGateway {
   process: ChildProcess | null;
   status: 'starting' | 'running' | 'stopped' | 'error';
   startedAt: Date;
+  gatewayToken: string; // 用户专属的 Gateway Token
   error?: string;
 }
 
@@ -21,6 +24,7 @@ interface UserGateway {
  * 管理多个用户的 OpenClaw Gateway 实例：
  * - 动态端口分配
  * - 进程生命周期管理
+ * - JWT 认证集成
  * - 健康检查
  */
 @Injectable()
@@ -32,8 +36,13 @@ export class GatewayManagerService implements OnModuleDestroy {
   private readonly maxPorts: number;
   private readonly openclawPath: string;
   private readonly workspacesBasePath: string;
+  private readonly gatewayHost: string;
+  private readonly jwtSecret: string;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly jwtService: JwtService,
+  ) {
     this.basePort = this.configService.get<number>('OPENCLAW_BASE_PORT', 18790);
     this.maxPorts = this.configService.get<number>('OPENCLAW_MAX_PORTS', 100);
     this.openclawPath = this.configService.get<string>(
@@ -44,6 +53,8 @@ export class GatewayManagerService implements OnModuleDestroy {
       'OPENCLAW_WORKSPACES_PATH',
       path.join(process.cwd(), 'workspaces'),
     );
+    this.gatewayHost = this.configService.get<string>('GATEWAY_HOST', 'localhost');
+    this.jwtSecret = this.configService.get<string>('JWT_SECRET', 'default-secret');
 
     this.logger.log(`Gateway Manager initialized (base port: ${this.basePort})`);
   }
@@ -51,12 +62,12 @@ export class GatewayManagerService implements OnModuleDestroy {
   /**
    * 为用户启动 Gateway 实例
    */
-  async startUserGateway(userId: string): Promise<{ port: number; status: string }> {
+  async startUserGateway(userId: string): Promise<{ port: number; status: string; token: string }> {
     // 检查是否已存在
     const existing = this.gateways.get(userId);
     if (existing && existing.status === 'running') {
       this.logger.debug(`Gateway already running for user ${userId} on port ${existing.port}`);
-      return { port: existing.port, status: 'running' };
+      return { port: existing.port, status: 'running', token: existing.gatewayToken };
     }
 
     // 分配端口
@@ -70,6 +81,9 @@ export class GatewayManagerService implements OnModuleDestroy {
 
     this.logger.log(`Starting OpenClaw Gateway for user ${userId} on port ${port}`);
 
+    // 生成用户专属 Gateway Token
+    const gatewayToken = this.generateGatewayToken(userId);
+
     // 创建 Gateway 实例记录
     const gateway: UserGateway = {
       userId,
@@ -77,25 +91,38 @@ export class GatewayManagerService implements OnModuleDestroy {
       process: null,
       status: 'starting',
       startedAt: new Date(),
+      gatewayToken,
     };
 
     this.gateways.set(userId, gateway);
 
     try {
-      // 生成用户专属 token
-      const token = this.generateUserToken(userId);
-
       // 启动 OpenClaw Gateway 进程
-      const proc = spawn('node', [this.openclawPath, 'gateway', '--port', String(port), '--bind', 'lan', '--token', token, '--auth', 'token'], {
-        env: {
-          ...process.env,
-          OPENCLAW_WORKSPACE: workspacePath,
-          OPENCLAW_USER_ID: userId,
-          NODE_ENV: process.env.NODE_ENV || 'production',
+      const proc = spawn(
+        'node',
+        [
+          this.openclawPath,
+          'gateway',
+          '--port',
+          String(port),
+          '--bind',
+          'lan',
+          '--token',
+          gatewayToken,
+          '--auth',
+          'token',
+        ],
+        {
+          env: {
+            ...process.env,
+            OPENCLAW_WORKSPACE: workspacePath,
+            OPENCLAW_USER_ID: userId,
+            NODE_ENV: process.env.NODE_ENV || 'production',
+          },
+          stdio: ['ignore', 'pipe', 'pipe'],
+          detached: false,
         },
-        stdio: ['ignore', 'pipe', 'pipe'],
-        detached: false,
-      });
+      );
 
       gateway.process = proc;
 
@@ -136,7 +163,7 @@ export class GatewayManagerService implements OnModuleDestroy {
       // 等待启动完成（最多 10 秒）
       await this.waitForGatewayReady(gateway, 10000);
 
-      return { port: gateway.port, status: gateway.status };
+      return { port: gateway.port, status: gateway.status, token: gatewayToken };
     } catch (error) {
       gateway.status = 'error';
       gateway.error = error instanceof Error ? error.message : String(error);
@@ -182,24 +209,72 @@ export class GatewayManagerService implements OnModuleDestroy {
   /**
    * 获取用户 Gateway 信息
    */
-  getUserGateway(userId: string): { port: number; status: string; url: string } | null {
+  getUserGateway(userId: string): { port: number; status: string; url: string; token: string } | null {
     const gateway = this.gateways.get(userId);
     if (!gateway) {
       return null;
     }
 
-    const host = this.configService.get<string>('GATEWAY_HOST', 'localhost');
     return {
       port: gateway.port,
       status: gateway.status,
-      url: `ws://${host}:${gateway.port}`,
+      url: `ws://${this.gatewayHost}:${gateway.port}`,
+      token: gateway.gatewayToken,
     };
+  }
+
+  /**
+   * 验证 JWT 并获取 Gateway 连接信息
+   * 供 Desktop 客户端调用
+   */
+  async getGatewayConnectionInfo(authToken: string): Promise<{
+    url: string;
+    token: string;
+    port: number;
+  } | null> {
+    try {
+      // 验证 JWT Token
+      const payload = await this.jwtService.verifyAsync(authToken, {
+        secret: this.jwtSecret,
+      });
+
+      const userId = payload.sub;
+      if (!userId) {
+        return null;
+      }
+
+      // 获取或启动 Gateway
+      let gateway = this.getUserGateway(userId);
+      if (!gateway || gateway.status !== 'running') {
+        const result = await this.startUserGateway(userId);
+        gateway = {
+          port: result.port,
+          status: result.status,
+          url: `ws://${this.gatewayHost}:${result.port}`,
+          token: result.token,
+        };
+      }
+
+      return {
+        url: gateway.url,
+        token: gateway.token,
+        port: gateway.port,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to verify JWT: ${error}`);
+      return null;
+    }
   }
 
   /**
    * 获取所有 Gateway 状态
    */
-  getAllGateways(): Array<{ userId: string; port: number; status: string; startedAt: Date }> {
+  getAllGateways(): Array<{
+    userId: string;
+    port: number;
+    status: string;
+    startedAt: Date;
+  }> {
     return Array.from(this.gateways.values()).map((g) => ({
       userId: g.userId,
       port: g.port,
@@ -240,13 +315,28 @@ export class GatewayManagerService implements OnModuleDestroy {
   }
 
   /**
-   * 生成用户 Token
+   * 生成用户专属 Gateway Token
+   * 使用 HS256 对称加密（与 OpenClaw Gateway 兼容）
    */
-  private generateUserToken(userId: string): string {
-    // 使用简单的 token 生成，实际生产环境应使用 JWT
-    const secret = this.configService.get<string>('JWT_SECRET', 'default-secret');
-    const timestamp = Date.now();
-    return `lc_${userId}_${Buffer.from(`${userId}:${secret}:${timestamp}`).toString('base64')}`;
+  private generateGatewayToken(userId: string): string {
+    const jti = crypto.randomUUID();
+    const payload = {
+      sub: userId,
+      type: 'gateway',
+      jti,
+      iat: Math.floor(Date.now() / 1000),
+    };
+
+    // 使用简单的对称加密生成 Token
+    // OpenClaw Gateway 支持 --token 参数直接使用字符串
+    const tokenData = `${payload.sub}:${payload.jti}:${payload.iat}`;
+    const signature = crypto
+      .createHmac('sha256', this.jwtSecret)
+      .update(tokenData)
+      .digest('hex')
+      .slice(0, 32);
+
+    return `lc_gw_${Buffer.from(`${tokenData}:${signature}`).toString('base64url')}`;
   }
 
   /**

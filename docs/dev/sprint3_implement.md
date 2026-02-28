@@ -529,22 +529,58 @@ Coding Bot 完成数据爬取 → 触发社媒 Bot:
 
 ## 线 B — 延迟项 + 增强
 
-### Phase 5: OpenClaw Node 集成
+### Phase 5: OpenClaw Gateway 云端集成 ✅
 
-> 从 Sprint 2 延迟。将 Sprint 1 的 `child_process.exec()` 替换为 OpenClaw Node，获得更丰富的执行能力和安全模型。
+> **状态**: ✅ 已完成 (2026-02-28)
+>
+> **实现方案变更**：原计划在 Desktop 本地运行 OpenClaw Node 进程，后发现 OpenClaw Gateway 原生支持云端部署（`--bind lan`），改为在 Cloud Brain 部署 Gateway（每用户一个实例），Desktop 使用 `openclaw-node` 客户端连接。
 
-**目标**：Electron 端集成 OpenClaw Node 进程，命令通过 OpenClaw 执行而非直接 child_process。
+**目标**：在 Cloud Brain 部署 OpenClaw Gateway（每个用户一个实例），Desktop 使用 openclaw-node 连接，实现安全的远程命令执行。
 
-| # | 任务 | 产出 | 验收标准 |
-|---|------|------|---------|
-| 5.1 | OpenClaw Node 进程管理 | `apps/desktop/src/main/services/openclaw.service.ts` | spawn / 健康检查 / 重启 |
-| 5.2 | OpenClaw WebSocket 客户端 | 桌面端连接 OpenClaw Node | JSON-RPC 通信 |
-| 5.3 | 命令执行桥接 | device:command:execute → openclaw system.run | 替换 child_process.exec |
-| 5.4 | 安全模式配置 | exec-approvals: ask | 需要用户确认的命令弹出审批对话框 |
-| 5.5 | 能力上报 | device:register payload 中包含 capabilities | 上报 OpenClaw Node 支持的能力列表 |
-| 5.6 | 回退逻辑 | OpenClaw 不可用时回退到 child_process.exec | 保证基本功能不中断 |
-| 5.7 | Windows 兼容性验证 | 在 Windows 上测试 OpenClaw Node | 记录已知问题和 workaround |
-| 5.8 | 单元测试 | openclaw.service.spec.ts | Mock 进程管理 + 命令执行 |
+**实际实现文件：**
+
+| 端 | 文件 | 说明 |
+|----|------|------|
+| Server | `apps/server/src/openclaw/gateway-manager.service.ts` | 多租户 Gateway 管理服务 |
+| Server | `apps/server/src/openclaw/openclaw.module.ts` | NestJS 模块定义 |
+| Server | `apps/server/src/openclaw/openclaw.controller.ts` | REST API 控制器 |
+| Desktop | `apps/desktop/src/main/services/openclaw-client.service.ts` | OpenClaw 客户端服务 |
+| Desktop | `apps/desktop/src/main/services/command-executor.service.ts` | 双模式命令执行器（OpenClaw + child_process 降级） |
+| Desktop | `apps/desktop/src/main/ipc/openclaw.ipc.ts` | OpenClaw IPC 处理器 |
+| Docs | `docs/research/openclaw-architecture.md` | OpenClaw 云部署研究笔记 |
+| Docs | `docs/plans/2026-02-28-phase5-openclaw-design.md` | 设计文档 |
+| Docs | `docs/plans/2026-02-28-phase5-implementation.md` | 实施计划 |
+
+**核心功能：**
+- 动态端口分配 (18790-18889)
+- 多用户 Gateway 进程管理
+- JWT 认证集成的 Token 生成
+- OpenClaw 优先执行模式 + child_process 降级
+- Desktop 启动时自动连接 Gateway
+
+**数据流：**
+```
+Desktop 启动 → 加载 JWT Token → 调用 /openclaw/gateway/connect
+    → Server 启动/获取 Gateway 实例 → 返回 URL + Token
+    → Desktop 连接到 Gateway → 命令执行通过 OpenClaw
+```
+
+**API 端点：**
+- `GET /api/v1/openclaw/gateway/connect` - 获取 Gateway 连接信息
+- `POST /api/v1/openclaw/gateway/start` - 启动用户 Gateway
+- `POST /api/v1/openclaw/gateway/stop` - 停止用户 Gateway
+- `GET /api/v1/openclaw/gateway/status` - 获取 Gateway 状态
+
+**原计划任务（参考）：**
+
+| # | 任务 | 产出 | 验收标准 | 实际状态 |
+|---|------|------|---------|----------|
+| 5.1 | Gateway Manager Service | `gateway-manager.service.ts` | 多租户管理 | ✅ 完成 |
+| 5.2 | JWT 认证集成 | Gateway Token 生成 | Token 认证 | ✅ 完成 |
+| 5.3 | 命令执行桥接 | `command-executor.service.ts` | 双模式执行 | ✅ 完成 |
+| 5.4 | Desktop IPC | `openclaw.ipc.ts` | IPC 处理器 | ✅ 完成 |
+| 5.5 | 回退逻辑 | child_process fallback | 降级可用 | ✅ 完成 |
+| 5.6 | 单元测试 | `gateway-manager.service.spec.ts` | 测试覆盖 | ✅ 创建 |
 
 **关键实现**：
 

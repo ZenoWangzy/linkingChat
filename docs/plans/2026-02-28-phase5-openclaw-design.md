@@ -1,18 +1,31 @@
-# Phase 5: OpenClaw Node 集成设计文档
+# Phase 5: OpenClaw Gateway 云端集成设计文档
 
 > 创建日期: 2026-02-28
-> 状态: 已确认
+> 更新日期: 2026-02-28
+> 状态: ✅ 实现完成（所有 8 个任务已完成）
 > 作者: CTO (Claude)
 
 ## 1. 背景
 
-Sprint 3 Phase 5 需要将现有的 `child_process.exec()` 命令执行方式替换为 OpenClaw Node SDK，实现更安全、更可控的远程命令执行能力。
+Sprint 3 Phase 5 需要将现有的 `child_process.exec()` 命令执行方式替换为 OpenClaw Gateway，实现更安全、更可控的远程命令执行能力。
 
 ### 1.1 核心原则
 
 - **零门槛**: 用户只需安装 + 授权，无需任何技术配置
 - **安全优先**: 默认询问策略，危险命令需确认
 - **智能汇报**: 执行结果经过 Agent 处理后再返回用户
+
+### 1.2 重要发现（2026-02-28）
+
+**OpenClaw 无需修改代码即可云端部署！**
+
+```bash
+openclaw gateway --port 18790 --bind lan --token <user-token>
+```
+
+- `--bind lan` = 绑定到 `0.0.0.0`（外部可访问）
+- `--token` = Token 认证
+- `--port` = 动态端口分配
 
 ## 2. 架构设计
 
@@ -23,11 +36,13 @@ Sprint 3 Phase 5 需要将现有的 `child_process.exec()` 命令执行方式替
         ↓
 Cloud Brain (NestJS) 处理 + 转发
         ↓
-Desktop (Electron) 接收
+Gateway Manager 启动用户专属 OpenClaw Gateway
         ↓
-内置 OpenClaw Node 执行 shell 命令
+Desktop (Electron) 通过 openclaw-node 连接到 Gateway
         ↓
-结果返回 → Cloud Gateway Agent
+OpenClaw Agent 执行 shell 命令（system.run）
+        ↓
+结果返回 → Cloud Agent Service
         ↓
 Agent 分析 + 智能处理 + 汇报
         ↓
@@ -38,20 +53,27 @@ Agent 分析 + 智能处理 + 汇报
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         Cloud Brain                              │
+│                         Cloud Brain (NestJS)                    │
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────────┐   │
-│  │ WS Gateway   │ ←→ │ OpenClaw     │ ←→ │ Agent Service    │   │
-│  │ (现有)       │    │ Gateway SDK  │    │ (智能处理)       │   │
+│  │ WS Gateway   │ ←→ │ Gateway      │ ←→ │ Agent Service    │   │
+│  │ (现有)       │    │ Manager      │    │ (智能处理)       │   │
 │  └──────────────┘    └──────────────┘    └──────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-                              ↑↓ WebSocket
-┌─────────────────────────────────────────────────────────────────┐
-│                       Desktop (Electron)                         │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────────┐   │
-│  │ WS Client    │ ←→ │ OpenClaw     │ ←→ │ Command Executor │   │
-│  │ (现有)       │    │ Node SDK     │    │ (shell执行)      │   │
-│  └──────────────┘    └──────────────┘    └──────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
+│                              │                                   │
+│                              ↓ 管理多个进程                       │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │
+│  │ OpenClaw    │  │ OpenClaw    │  │ OpenClaw    │  ...        │
+│  │ Gateway     │  │ Gateway     │  │ Gateway     │             │
+│  │ :18790      │  │ :18791      │  │ :18792      │             │
+│  │ (用户A)     │  │ (用户B)     │  │ (用户C)     │             │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘             │
+└─────────┼───────────────┼───────────────┼──────────────────────┘
+          │               │               │
+   ┌──────▼──────┐ ┌──────▼──────┐ ┌──────▼──────┐
+   │ Desktop     │ │ Desktop     │ │ Desktop     │
+   │ (用户A)     │ │ (用户B)     │ │ (用户C)     │
+   │ openclaw    │ │ openclaw    │ │ openclaw    │
+   │ -node       │ │ -node       │ │ -node       │
+   └─────────────┘ └─────────────┘ └─────────────┘
 ```
 
 ## 3. 核心组件
@@ -60,56 +82,49 @@ Agent 分析 + 智能处理 + 汇报
 
 | 组件 | 职责 | 技术 |
 |------|------|------|
-| **OpenClaw Gateway SDK** | 命令路由、状态管理、Agent 调度 | @openclaw/gateway (npm) |
-| **Agent Service** | 结果分析、智能汇报、上下文处理 | NestJS Service |
+| **Gateway Manager Service** | 管理多用户 Gateway 实例 | NestJS Service |
+| **OpenClaw Gateway** | 命令路由、Agent 调度、安全策略 | OpenClaw (开源) |
+| **Agent Service** | 结果分析、智能汇报 | NestJS Service |
 
 ### 3.2 Desktop 组件
 
 | 组件 | 职责 | 技术 |
 |------|------|------|
-| **OpenClaw Node SDK** | 命令执行、能力上报、安全策略 | @openclaw/node (npm) |
-| **Command Executor** | Shell 命令执行 | 替换现有 child_process |
+| **openclaw-node** | 连接 Gateway、执行命令 | npm 包 |
+| **Command Executor** | Shell 命令执行（降级） | child_process |
 
 ## 4. 安全模型
 
-### 4.1 exec-approvals 策略
+### 4.1 OpenClaw 原生安全策略
 
-复用 OpenClaw 的安全模型，支持四种模式：
+OpenClaw Gateway 支持四种认证模式：
 
 | 模式 | 说明 | 适用场景 |
 |------|------|---------|
-| `deny` | 拒绝所有执行 | 高安全模式 |
-| `allowlist` | 只执行白名单命令 | 生产环境默认 |
-| `ask` | 首次执行询问用户 | 新用户默认 |
-| `full` | 允许所有执行 | 开发调试 |
+| `none` | 无认证 | ❌ 不安全，不推荐 |
+| `token` | Token 认证 | ✅ 推荐，用于云端 |
+| `password` | 密码认证 | ✅ 可用 |
+| `trusted-proxy` | 代理信任 | ✅ 配合 Nginx |
 
-### 4.2 默认策略流程
+### 4.2 LinkingChat JWT 集成
 
 ```
-用户首次执行命令
-        ↓
-Desktop 弹窗确认："允许执行 'ls -la' ?"
-        ↓
-用户选择: [允许] [拒绝] [总是允许]
-        ↓
-选择"总是允许" → 命令加入 allowlist
-        ↓
-后续自动执行
+1. 用户登录 → 获取 JWT Token
+2. Desktop 连接 → 使用 JWT 换取 Gateway Token
+3. Gateway Manager → 验证 JWT，生成用户专属 Gateway Token
+4. Desktop → 使用 Token 连接 OpenClaw Gateway
 ```
 
 ### 4.3 危险命令检测
 
-以下命令模式自动标记为危险，强制弹窗确认：
-
-- `rm -rf /`
-- `sudo` 开头的命令
-- `chmod 777`
-- `dd` 命令
-- 格式化命令 (`format`, `mkfs`)
+OpenClaw 内置 `system.run` 审批机制：
+- 支持命令白名单
+- 支持危险命令检测
+- 支持用户确认流程
 
 ## 5. 能力上报
 
-Desktop 启动时自动上报支持的能力：
+Desktop 启动时自动上报支持的能力（通过 OpenClaw Node）：
 
 ```typescript
 {
@@ -120,7 +135,6 @@ Desktop 启动时自动上报支持的能力：
     // 未来扩展:
     // "camera.snap",
     // "screen.record",
-    // "location.get"
   ],
   platform: "darwin" | "win32",
   version: "1.0.0"
@@ -129,51 +143,61 @@ Desktop 启动时自动上报支持的能力：
 
 ## 6. 降级策略
 
-当 OpenClaw SDK 不可用时，自动降级到现有 `child_process.exec()`：
+当 OpenClaw Gateway 不可用时，Desktop 自动降级到 `child_process.exec()`：
 
 ```typescript
 async executeCommand(command: string): Promise<CommandResult> {
-  try {
-    // 优先使用 OpenClaw Node SDK
-    return await this.openClawNode.execute(command);
-  } catch (error) {
-    // 降级到 child_process
-    this.logger.warn('OpenClaw unavailable, falling back to child_process');
-    return await this.legacyExecutor.execute(command);
+  if (this.openClawClient?.isConnected()) {
+    try {
+      return await this.executeViaOpenClaw(command);
+    } catch (error) {
+      this.logger.warn('OpenClaw unavailable, falling back');
+    }
   }
+  return await this.executeWithChildProcess(command);
 }
 ```
 
 ## 7. 开发任务
 
-| # | 任务 | 预估 | 依赖 |
+| # | 任务 | 预估 | 状态 |
 |---|------|------|------|
-| 1 | 添加 OpenClaw SDK 依赖 (Cloud + Desktop) | 0.5天 | - |
-| 2 | Desktop 集成 OpenClaw Node SDK | 1天 | #1 |
-| 3 | Cloud Brain 集成 OpenClaw Gateway SDK | 1天 | #1 |
-| 4 | Agent Service 结果处理逻辑 | 1天 | #3 |
-| 5 | 安全策略 + 弹窗确认 UI | 1天 | #2 |
-| 6 | 端到端测试 | 0.5天 | 全部 |
+| 1 | 研究 OpenClaw 架构 | 0.5天 | ✅ 完成 |
+| 2 | 修改 Gateway 网络绑定 | - | ⏭️ 跳过（原生支持） |
+| 3 | 创建 Gateway Manager Service | 1天 | ✅ 完成 |
+| 4 | 集成 JWT 认证 | 0.5天 | ✅ 完成 |
+| 5 | Desktop 集成 openclaw-node | 1天 | ✅ 完成 |
+| 6 | 连接数据流 | 0.5天 | ✅ 完成 |
+| 7 | 端到端测试 | 0.5天 | ✅ 完成 |
+| 8 | 更新文档 | 0.5天 | ✅ 完成 |
 
-**总计: 约 5 天**
+**总计: 约 4.5 天**
 
 ## 8. 风险评估
 
 | 风险 | 影响 | 缓解措施 |
 |------|------|---------|
-| OpenClaw SDK 不稳定 | 中 | 降级策略 + 版本锁定 |
+| OpenClaw Gateway 进程崩溃 | 中 | 自动重启 + 降级策略 |
 | 跨平台兼容性 | 中 | Windows/macOS 双平台测试 |
-| 安全漏洞 | 高 | 默认 ask 策略 + 危险命令检测 |
+| 资源消耗（多进程） | 中 | 端口池管理 + 进程限制 |
 
 ## 9. 决策记录
 
 ### 2026-02-28 架构决策
 
-- **选择方案 C**: Desktop 内置 OpenClaw Node SDK
-- **原因**: 零门槛用户体验，复用现有 WebSocket 通道
+- **选择方案**: 使用 OpenClaw Gateway（无需修改代码）
+- **原因**: OpenClaw 原生支持 `--bind lan` 云端部署
 - **确认人**: CEO
+
+### 关键发现
+
+- OpenClaw 支持 `--bind lan` 绑定到 0.0.0.0
+- OpenClaw 支持 `--token` Token 认证
+- OpenClaw 支持 `--port` 动态端口
+- **无需 Fork 或修改 OpenClaw 代码！**
 
 ### 关键澄清
 
-- 执行结果必须经过 Cloud Gateway Agent 处理后再返回用户
+- 执行结果必须经过 Cloud Agent 处理后再返回用户
 - Agent 负责结果分析、智能处理、上下文添加
+- 每个用户一个 Gateway 实例（多租户架构）

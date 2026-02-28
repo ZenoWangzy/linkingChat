@@ -1,4 +1,11 @@
-import { Controller, Get, Post, UseGuards, Req } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  UseGuards,
+  Req,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { GatewayManagerService } from './gateway-manager.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
@@ -11,15 +18,46 @@ export class OpenclawController {
   constructor(private readonly gatewayManager: GatewayManagerService) {}
 
   /**
+   * 获取 Gateway 连接信息（供 Desktop 使用）
+   * Desktop 使用 JWT Token 调用此接口，获取 Gateway URL 和 Token
+   */
+  @Get('gateway/connect')
+  async getConnectInfo(@Req() req: any) {
+    const authToken = req.headers.authorization?.replace('Bearer ', '');
+
+    if (!authToken) {
+      throw new UnauthorizedException('No auth token provided');
+    }
+
+    const info = await this.gatewayManager.getGatewayConnectionInfo(authToken);
+
+    if (!info) {
+      return {
+        success: false,
+        error: 'Failed to get gateway connection info',
+      };
+    }
+
+    return {
+      success: true,
+      data: info,
+    };
+  }
+
+  /**
    * 启动用户的 Gateway 实例
    */
   @Post('gateway/start')
   async startGateway(@Req() req: any) {
-    const userId = req.user.sub;
+    const userId = req.user.userId || req.user.sub;
     const result = await this.gatewayManager.startUserGateway(userId);
     return {
       success: true,
-      data: result,
+      data: {
+        port: result.port,
+        status: result.status,
+        // 注意：token 不应该直接返回给前端，只用于 Desktop
+      },
     };
   }
 
@@ -28,7 +66,7 @@ export class OpenclawController {
    */
   @Post('gateway/stop')
   async stopGateway(@Req() req: any) {
-    const userId = req.user.sub;
+    const userId = req.user.userId || req.user.sub;
     await this.gatewayManager.stopUserGateway(userId);
     return {
       success: true,
@@ -41,7 +79,7 @@ export class OpenclawController {
    */
   @Get('gateway/status')
   async getGatewayStatus(@Req() req: any) {
-    const userId = req.user.sub;
+    const userId = req.user.userId || req.user.sub;
     const gateway = this.gatewayManager.getUserGateway(userId);
 
     if (!gateway) {
@@ -58,7 +96,9 @@ export class OpenclawController {
       success: true,
       data: {
         running: gateway.status === 'running',
-        ...gateway,
+        port: gateway.port,
+        status: gateway.status,
+        url: gateway.url,
       },
     };
   }
