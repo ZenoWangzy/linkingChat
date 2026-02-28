@@ -13,6 +13,7 @@ import { MessagesModule } from './messages/messages.module';
 import { UsersModule } from './users/users.module';
 import { BotsModule } from './bots/bots.module';
 import { AiModule } from './ai/ai.module';
+import { OpenclawModule } from './openclaw/openclaw.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { AiModule } from './ai/ai.module';
     UsersModule,
     BotsModule,
     AiModule,
+    OpenclawModule,
   ],
   controllers: [AppController],
   providers: [AppService],
