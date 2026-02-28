@@ -20,10 +20,11 @@ LinkingChat (codename: Ghost Mate) has completed **Sprint 0–2**. The platform 
 - **Sprint 0** ✅ — Infrastructure setup (monorepo, Docker, Prisma, CI)
 - **Sprint 1** ✅ — Auth (JWT RS256) + device registration + WS gateway + shell exec + full chain PoC
 - **Sprint 2** ✅ — Friends, 1-on-1 chat, presence, read receipts, Bot framework (Bot-as-User), group chat CRUD + permissions, Flutter + Desktop full chat UI (~90 new files, ~8,500+ lines)
-- **Sprint 3** 🔧 — AI module (LLM Router, Whisper, Draft & Verify, Predictive Actions) + OpenClaw Node + Supervisor notifications
+- **Sprint 3** 🔧 — AI module (LLM Router, Whisper, Draft & Verify, Predictive Actions) + OpenClaw Gateway + Supervisor notifications
+  - **Phase 5** ✅ — OpenClaw Gateway 云端集成已完成 (2026-02-28)
 
 ### Sprint 2 deferred to Sprint 3:
-- OpenClaw Node integration (Sprint 3 Phase 5)
+- OpenClaw Gateway integration (Sprint 3 Phase 5 ✅ 完成)
 - Supervisor notification aggregation (Sprint 3 Phase 6)
 
 Technical decisions are in `docs/decisions/decision-checklist.md` and `docs/decisions/tech-decisions-v2.md`.
@@ -48,13 +49,21 @@ LinkingChat is a **new AI-native social app** (similar in form to Discord/Telegr
 
 Three-tier distributed system: "Cloud Brain + Local Hands"
 
+### OpenClaw Cloud Architecture (Phase 5)
+OpenClaw Gateway 部署在 Cloud Brain（每用户一个实例），Desktop 使用 openclaw-node 客户端连接：
+- Gateway Manager Service 管理多用户 Gateway 进程
+- 动态端口分配 (18790-18889)
+- JWT Token 认证集成
+- Desktop 启动时自动连接，命令执行优先使用 OpenClaw，失败降级到 child_process
+
 ```
 Flutter Mobile App  <--WSS-->  Cloud Brain (NestJS)  <--WSS-->  Electron Desktop Client
   (Controller)                   ├── WebSocket Gateway                 ├── Social UI (chat)
   ├── Social UI                  ├── Intent Planner                    ├── OpenClaw Worker
-  ├── Send commands              ├── LLM Router                        ├── Shell Exec
+  ├── Send commands              ├── LLM Router                        ├── Shell Exec (fallback)
   └── Confirm drafts             ├── Draft State Machine               ├── File IO
-                                 └── OpenClaw Integration              └── Local task execution
+                                 ├── OpenClaw Integration              └── Local task execution
+                                 └── Gateway Manager (multi-tenant)
 ```
 
 - **Mobile App (Flutter)**: Social interface + remote command issuer. iOS & Android from one codebase.
@@ -78,6 +87,7 @@ Flutter Mobile App  <--WSS-->  Cloud Brain (NestJS)  <--WSS-->  Electron Desktop
 - Messages: `/api/v1/messages/*`
 - Bots: `/api/v1/bots/*`
 - Commands: `/api/v1/commands/*`
+- OpenClaw: `/api/v1/openclaw/gateway/*` (connect, start, stop, status)
 
 ### WebSocket namespaces
 - `/device` — device control (register, heartbeat, command send/execute/result)
@@ -191,6 +201,10 @@ docs/
 │   ├── sprint3_implement.md            — Sprint 3: AI module + OpenClaw + enhancements (🔧 NEXT)
 │   └── sprint4_implement.md            — Sprint 4: Polish + production readiness
 │
+├── plans/                              # Phase-specific design documents
+│   ├── 2026-02-28-phase5-openclaw-design.md        — Phase 5 OpenClaw 架构设计
+│   └── 2026-02-28-phase5-implementation.md         — Phase 5 实施计划
+│
 └── _archive/                           # Superseded documents
     ├── architecture.md                 — Old "parasitic Desktop Bridge" direction
     ├── prd.md                          — Old product requirements
@@ -206,3 +220,14 @@ Most blocking questions have been resolved in `docs/decisions/tech-decisions-v2.
 - ~~**F3**: "Control own desktop" vs "control friend's desktop"~~ → MVP: control own desktop
 - ~~**F4**: MVP social feature boundary~~ → Resolved: All features except voice/video calls, see tech-decisions-v2.md §1.2
 - ~~**F7**: Electron desktop app positioning~~ → Resolved: Social client + OpenClaw executor (confirmed by Sprint 1-2 implementation)
+
+## Key File Locations (Phase 5+)
+
+### OpenClaw Integration
+- Server: `apps/server/src/openclaw/` — Gateway Manager, Controller, Module
+- Desktop: `apps/desktop/src/main/services/openclaw-client.service.ts` — OpenClaw 客户端
+- Desktop: `apps/desktop/src/main/services/command-executor.service.ts` — 双模式命令执行器
+- Tests: `apps/server/src/openclaw/__tests__/gateway-manager.service.spec.ts`
+
+### Test Files Location
+- Server tests: `apps/server/src/<module>/__tests__/` (colocated with source)
