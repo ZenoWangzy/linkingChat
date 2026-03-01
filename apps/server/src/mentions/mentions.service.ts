@@ -61,4 +61,55 @@ export class MentionService {
       return true;
     });
   }
+
+  /**
+   * 验证 @mentions 并获取对应的 Bot 信息
+   *
+   * @param mentions - 解析后的 mentions
+   * @param _converseId - 会话 ID（用于未来可能的权限检查）
+   * @returns 验证后的有效 mentions
+   */
+  async validate(
+    mentions: ParsedMention[],
+    _converseId: string,
+  ): Promise<ValidMention[]> {
+    if (mentions.length === 0) return [];
+
+    const validMentions: ValidMention[] = [];
+
+    // 1. 特殊处理 @ai
+    const aiMention = mentions.find((m) => m.name.toLowerCase() === 'ai');
+    if (aiMention) {
+      validMentions.push({
+        type: 'ai',
+        name: 'ai',
+        fullMatch: aiMention.fullMatch,
+      });
+    }
+
+    // 2. 查询存在的 Bot
+    const botNames = mentions
+      .filter((m) => m.name.toLowerCase() !== 'ai')
+      .map((m) => m.name);
+
+    if (botNames.length > 0) {
+      const bots = await this.prisma.bot.findMany({
+        where: {
+          name: { in: botNames },
+        },
+      });
+
+      for (const bot of bots) {
+        validMentions.push({
+          type: 'bot',
+          name: bot.name,
+          fullMatch: `@${bot.name}`,
+          botId: bot.id,
+          userId: bot.userId,
+        });
+      }
+    }
+
+    return validMentions;
+  }
 }

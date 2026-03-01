@@ -66,4 +66,73 @@ describe('MentionService', () => {
       expect(result).toEqual([]);
     });
   });
+
+  describe('validate', () => {
+    it('should validate @ai as special type', async () => {
+      const parsed = service.parse('Hello @ai');
+      const result = await service.validate(parsed, 'converse-1');
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({
+        type: 'ai',
+        name: 'ai',
+        fullMatch: '@ai',
+      });
+    });
+
+    it('should return empty for non-existent bot', async () => {
+      const mockPrisma = {
+        bot: {
+          findMany: jest.fn().mockResolvedValue([]),
+        },
+      };
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          MentionService,
+          { provide: PrismaService, useValue: mockPrisma },
+          { provide: WhisperService, useValue: {} },
+          { provide: AgentOrchestratorService, useValue: {} },
+        ],
+      }).compile();
+
+      const serviceWithMock = module.get<MentionService>(MentionService);
+      const parsed = serviceWithMock.parse('Hello @NonExistentBot');
+      const result = await serviceWithMock.validate(parsed, 'converse-1');
+
+      expect(result).toEqual([]);
+    });
+
+    it('should validate existing bot from database', async () => {
+      const mockPrisma = {
+        bot: {
+          findMany: jest.fn().mockResolvedValue([
+            { id: 'bot-1', name: 'CodingBot', userId: 'user-1' },
+          ]),
+        },
+      };
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          MentionService,
+          { provide: PrismaService, useValue: mockPrisma },
+          { provide: WhisperService, useValue: {} },
+          { provide: AgentOrchestratorService, useValue: {} },
+        ],
+      }).compile();
+
+      const serviceWithMock = module.get<MentionService>(MentionService);
+      const parsed = serviceWithMock.parse('@CodingBot help');
+      const result = await serviceWithMock.validate(parsed, 'converse-1');
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({
+        type: 'bot',
+        name: 'CodingBot',
+        fullMatch: '@CodingBot',
+        botId: 'bot-1',
+        userId: 'user-1',
+      });
+    });
+  });
 });
