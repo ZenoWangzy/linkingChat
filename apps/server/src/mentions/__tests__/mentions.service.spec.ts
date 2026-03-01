@@ -135,4 +135,85 @@ describe('MentionService', () => {
       });
     });
   });
+
+  describe('route', () => {
+    it('should route @ai to WhisperService', async () => {
+      const mockWhisper = {
+        handleWhisperTrigger: jest.fn().mockResolvedValue(undefined),
+      };
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          MentionService,
+          { provide: PrismaService, useValue: { bot: { findMany: jest.fn() } } },
+          { provide: WhisperService, useValue: mockWhisper },
+          { provide: AgentOrchestratorService, useValue: { dispatchEvent: jest.fn() } },
+        ],
+      }).compile();
+
+      const serviceWithMock = module.get<MentionService>(MentionService);
+
+      const mentions = [{
+        type: 'ai' as const,
+        name: 'ai',
+        fullMatch: '@ai',
+      }];
+
+      await serviceWithMock.route(mentions, {
+        id: 'msg-1',
+        content: '@ai hello',
+        converseId: 'conv-1',
+      } as any, 'user-1', 'conv-1');
+
+      expect(mockWhisper.handleWhisperTrigger).toHaveBeenCalledWith(
+        'user-1',
+        'conv-1',
+        'msg-1',
+      );
+    });
+
+    it('should route @bot to AgentOrchestrator', async () => {
+      const mockOrchestrator = {
+        dispatchEvent: jest.fn().mockResolvedValue(undefined),
+      };
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          MentionService,
+          { provide: PrismaService, useValue: { bot: { findMany: jest.fn() } } },
+          { provide: WhisperService, useValue: { handleWhisperTrigger: jest.fn() } },
+          { provide: AgentOrchestratorService, useValue: mockOrchestrator },
+        ],
+      }).compile();
+
+      const serviceWithMock = module.get<MentionService>(MentionService);
+
+      const mentions = [{
+        type: 'bot' as const,
+        name: 'CodingBot',
+        fullMatch: '@CodingBot',
+        botId: 'bot-1',
+        userId: 'user-bot-1',
+      }];
+
+      await serviceWithMock.route(mentions, {
+        id: 'msg-1',
+        content: '@CodingBot help',
+        converseId: 'conv-1',
+      } as any, 'user-1', 'conv-1');
+
+      expect(mockOrchestrator.dispatchEvent).toHaveBeenCalledWith(
+        'bot-1',
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'USER_MESSAGE',
+            payload: expect.objectContaining({
+              userId: 'user-1',
+              converseId: 'conv-1',
+            }),
+          }),
+        ]),
+      );
+    });
+  });
 });

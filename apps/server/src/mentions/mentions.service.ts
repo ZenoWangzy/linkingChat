@@ -112,4 +112,87 @@ export class MentionService {
 
     return validMentions;
   }
+
+  /**
+   * 路由 @mentions 到对应的处理器
+   *
+   * @param mentions - 验证后的 mentions
+   * @param message - 原始消息对象
+   * @param senderId - 发送者 ID
+   * @param converseId - 会话 ID
+   */
+  async route(
+    mentions: ValidMention[],
+    message: { id: string; content: string | null; converseId: string },
+    senderId: string,
+    converseId: string,
+  ): Promise<void> {
+    for (const mention of mentions) {
+      try {
+        switch (mention.type) {
+          case 'bot':
+            await this.routeToBot(mention, message, senderId, converseId);
+            break;
+          case 'ai':
+            await this.routeToSupervisor(senderId, converseId, message.id);
+            break;
+        }
+      } catch (error) {
+        this.logger.error(
+          `Failed to route mention ${mention.fullMatch}: ${error}`,
+        );
+      }
+    }
+  }
+
+  /**
+   * 路由到 Bot Agent
+   */
+  private async routeToBot(
+    mention: ValidMention,
+    message: { id: string; content: string | null; converseId: string },
+    senderId: string,
+    converseId: string,
+  ): Promise<void> {
+    if (!mention.botId) return;
+
+    const event = {
+      type: 'USER_MESSAGE' as const,
+      payload: {
+        userId: senderId,
+        content: message.content || '',
+        converseId,
+      },
+      timestamp: new Date(),
+      source: {
+        userId: senderId,
+        botId: mention.botId,
+      },
+    };
+
+    await this.agentOrchestrator.dispatchEvent(mention.botId, [event]);
+
+    this.logger.log(
+      `Routed @${mention.name} to bot ${mention.botId} for message ${message.id}`,
+    );
+  }
+
+  /**
+   * 路由到 Supervisor (@ai)
+   */
+  private async routeToSupervisor(
+    senderId: string,
+    converseId: string,
+    messageId: string,
+  ): Promise<void> {
+    await this.whisperService.handleWhisperTrigger(
+      senderId,
+      converseId,
+      messageId,
+    );
+
+    this.logger.log(
+      `Routed @ai to WhisperService for message ${messageId}`,
+    );
+  }
 }
