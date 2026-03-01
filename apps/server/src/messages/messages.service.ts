@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { BroadcastService } from '../gateway/broadcast.service';
 import { ConversesService } from '../converses/converses.service';
 import { WhisperService } from '../ai/services/whisper.service';
+import { MentionService } from '../mentions/mentions.service';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { UpdateMessageDto } from './dto/update-message.dto';
 
@@ -28,6 +29,7 @@ export class MessagesService {
     private readonly broadcastService: BroadcastService,
     private readonly conversesService: ConversesService,
     private readonly whisperService: WhisperService,
+    private readonly mentionService: MentionService,
   ) {}
 
   /**
@@ -123,12 +125,18 @@ export class MessagesService {
       `Message created: ${message.id} in converse ${dto.converseId} by ${userId}`,
     );
 
-    // 7. 检测收件人是否为 Bot（fire-and-forget，不阻塞消息返回）
+    // 7. 群聊 @mention 路由（fire-and-forget）
+    this.handleGroupMentions(userId, dto.converseId, message)
+      .catch((err) =>
+        this.logger.error(`handleGroupMentions failed: ${err.message}`, err.stack),
+      );
+
+    // 8. 私信 Bot 检测（保留原有逻辑，仅记录日志）
     this.detectBotRecipient(userId, dto.converseId, message).catch((err) =>
       this.logger.error(`detectBotRecipient failed: ${err.message}`, err.stack),
     );
 
-    // 8. 检测 @ai 触发词（fire-and-forget）
+    // 9. 检测 @ai 触发词（fire-and-forget）- 保留兼容
     if (this.whisperService.isWhisperTrigger(message.content)) {
       this.whisperService
         .handleWhisperTrigger(userId, dto.converseId, message.id)
@@ -138,6 +146,45 @@ export class MessagesService {
     }
 
     return message;
+  }
+
+  /**
+   * 处理群聊中的 @mention 路由
+   *
+   * @param userId - 发送者 ID
+   * @param converseId - 会话 ID
+   * @param message - 消息对象
+   */
+  private async handleGroupMentions(
+    userId: string,
+    converseId: string,
+    message: { id: string; content: string | null; type: string },
+  ): Promise<void> {
+    // 获取会话类型
+    const converse = await this.prisma.converse.findUnique({
+      where: { id: converseId },
+      select: { type: true },
+    });
+
+    if (!converse || converse.type !== 'GROUP') return;
+
+    // 解析 @mentions
+    const mentions = this.mentionService.parse(message.content);
+    if (mentions.length === 0) return;
+
+    // 验证并路由
+    const validMentions = await this.mentionService.validate(mentions, converseId);
+    if (validMentions.length === 0) return;
+
+    await this.mentionService.route(validMentions, {
+      id: message.id,
+      content: message.content,
+      converseId,
+    }, userId, converseId);
+
+    this.logger.log(
+      `Routed ${validMentions.length} mentions in group ${converseId}`,
+    );
   }
 
   /**
