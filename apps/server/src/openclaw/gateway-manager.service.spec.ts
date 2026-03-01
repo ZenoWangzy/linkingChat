@@ -5,7 +5,7 @@ import { GatewayManagerService } from './gateway-manager.service';
 
 // ── Mock Services ────────────────────────────
 
-const mockConfigService = {
+const createMockConfigService = () => ({
   get: jest.fn((key: string, defaultValue: any) => {
     const config: Record<string, any> = {
       OPENCLAW_BASE_PORT: 18790,
@@ -17,18 +17,24 @@ const mockConfigService = {
     };
     return config[key] ?? defaultValue;
   }),
-};
+});
 
-const mockJwtService = {
+const createMockJwtService = () => ({
   verifyAsync: jest.fn(),
-};
+});
 
 // ── 测试套件 ────────────────────────────
 
 describe('GatewayManagerService', () => {
   let service: GatewayManagerService;
+  let mockConfigService: ReturnType<typeof createMockConfigService>;
+  let mockJwtService: ReturnType<typeof createMockJwtService>;
 
   beforeEach(async () => {
+    // Create fresh mocks before each test
+    mockConfigService = createMockConfigService();
+    mockJwtService = createMockJwtService();
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         GatewayManagerService,
@@ -38,9 +44,6 @@ describe('GatewayManagerService', () => {
     }).compile();
 
     service = module.get<GatewayManagerService>(GatewayManagerService);
-
-    // Reset mocks
-    jest.clearAllMocks();
   });
 
   afterEach(async () => {
@@ -67,18 +70,24 @@ describe('GatewayManagerService', () => {
 
   describe('startUserGateway', () => {
     it('应该为用户分配有效端口', async () => {
-      // 注意：这个测试会尝试启动真实进程
-      // 在 CI 环境中可能需要 mock child_process
       const userId = 'test-user-1';
 
-      // Mock process spawn (避免真实启动进程)
+      // Mock process spawn with immediate ready signal
       const originalSpawn = require('child_process').spawn;
-      require('child_process').spawn = jest.fn(() => ({
-        stdout: { on: jest.fn() },
+      const mockProcess = {
+        stdout: {
+          on: jest.fn((event: string, callback: (data: Buffer) => void) => {
+            if (event === 'data') {
+              // Immediately emit "Gateway started" to signal ready
+              callback(Buffer.from('Gateway started on port 18790'));
+            }
+          }),
+        },
         stderr: { on: jest.fn() },
         on: jest.fn(),
         kill: jest.fn(),
-      }));
+      };
+      require('child_process').spawn = jest.fn(() => mockProcess as any);
 
       try {
         const result = await service.startUserGateway(userId);
@@ -86,7 +95,7 @@ describe('GatewayManagerService', () => {
         expect(result).toBeDefined();
         expect(result.port).toBeGreaterThanOrEqual(18790);
         expect(result.port).toBeLessThan(18890);
-        expect(result.status).toBeDefined();
+        expect(result.status).toBe('running');
         expect(result.token).toBeDefined();
         expect(result.token).toMatch(/^lc_gw_/);
       } finally {
@@ -97,15 +106,21 @@ describe('GatewayManagerService', () => {
     it('同一用户重复调用应返回相同端口', async () => {
       const userId = 'test-user-2';
 
-      // Mock process spawn
+      // Mock process spawn with immediate ready signal
       const originalSpawn = require('child_process').spawn;
       const mockProcess = {
-        stdout: { on: jest.fn() },
+        stdout: {
+          on: jest.fn((event: string, callback: (data: Buffer) => void) => {
+            if (event === 'data') {
+              callback(Buffer.from('Gateway started'));
+            }
+          }),
+        },
         stderr: { on: jest.fn() },
         on: jest.fn(),
         kill: jest.fn(),
       };
-      require('child_process').spawn = jest.fn(() => mockProcess);
+      require('child_process').spawn = jest.fn(() => mockProcess as any);
 
       try {
         const result1 = await service.startUserGateway(userId);
@@ -149,14 +164,21 @@ describe('GatewayManagerService', () => {
     it('有效 JWT 应返回连接信息', async () => {
       mockJwtService.verifyAsync.mockResolvedValue({ sub: 'user-123' });
 
-      // Mock process spawn
+      // Mock process spawn with immediate ready signal
       const originalSpawn = require('child_process').spawn;
-      require('child_process').spawn = jest.fn(() => ({
-        stdout: { on: jest.fn() },
+      const mockProcess = {
+        stdout: {
+          on: jest.fn((event: string, callback: (data: Buffer) => void) => {
+            if (event === 'data') {
+              callback(Buffer.from('Gateway started'));
+            }
+          }),
+        },
         stderr: { on: jest.fn() },
         on: jest.fn(),
         kill: jest.fn(),
-      }));
+      };
+      require('child_process').spawn = jest.fn(() => mockProcess as any);
 
       try {
         const result = await service.getGatewayConnectionInfo('valid-token');
