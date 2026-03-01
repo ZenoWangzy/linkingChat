@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { BroadcastService } from '../gateway/broadcast.service';
 import { ConversesService } from '../converses/converses.service';
 import { WhisperService } from '../ai/services/whisper.service';
+import { MentionService } from '../mentions/mentions.service';
 import {
   NotFoundException,
   ForbiddenException,
@@ -27,6 +28,7 @@ describe('MessagesService', () => {
     },
     converse: {
       update: jest.fn(),
+      findUnique: jest.fn(),
     },
     bot: {
       findUnique: jest.fn(),
@@ -53,6 +55,12 @@ describe('MessagesService', () => {
     handleWhisperTrigger: jest.fn().mockResolvedValue(undefined),
   };
 
+  const mockMention = {
+    parse: jest.fn().mockReturnValue([]),
+    validate: jest.fn().mockResolvedValue([]),
+    route: jest.fn().mockResolvedValue(undefined),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -61,6 +69,7 @@ describe('MessagesService', () => {
         { provide: BroadcastService, useValue: mockBroadcast },
         { provide: ConversesService, useValue: mockConverses },
         { provide: WhisperService, useValue: mockWhisper },
+        { provide: MentionService, useValue: mockMention },
       ],
     }).compile();
 
@@ -69,6 +78,8 @@ describe('MessagesService', () => {
 
     // Default: detectBotRecipient finds no other members (fire-and-forget)
     mockPrisma.converseMember.findMany.mockResolvedValue([]);
+    // Default: handleGroupMentions returns early (DIRECT type)
+    mockPrisma.converse.findUnique.mockResolvedValue({ type: 'DIRECT' });
   });
 
   describe('create', () => {
