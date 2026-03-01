@@ -64,6 +64,7 @@ _archive/
 # Tool directories
 .claude/
 .playwright-mcp/
+.worktrees/
 
 # Research temp clones
 tempvalkyrie-v1/
