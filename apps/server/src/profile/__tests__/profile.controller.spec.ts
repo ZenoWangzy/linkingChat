@@ -2,10 +2,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ProfileController } from '../profile.controller';
 import { ProfileService } from '../profile.service';
+import { UploadService } from '../../upload/upload.service';
 
 describe('ProfileController', () => {
   let controller: ProfileController;
   let profileService: any;
+  let uploadService: any;
 
   const mockUser = {
     id: 'user-1',
@@ -28,11 +30,18 @@ describe('ProfileController', () => {
             updateAvatar: jest.fn(),
           },
         },
+        {
+          provide: UploadService,
+          useValue: {
+            uploadImage: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
     controller = module.get(ProfileController);
     profileService = module.get(ProfileService);
+    uploadService = module.get(UploadService);
   });
 
   describe('getCurrentUser', () => {
@@ -72,10 +81,15 @@ describe('ProfileController', () => {
         stream: process.stdout,
       } as any;
 
+      uploadService.uploadImage.mockResolvedValue('https://example.com/avatar.jpg');
+
       const result = await controller.uploadAvatar('user-1', file);
 
-      expect(result.avatarUrl).toContain('avatar');
-      expect(profileService.updateAvatar).toHaveBeenCalled();
+      expect(result.avatarUrl).toBe('https://example.com/avatar.jpg');
+      expect(profileService.updateAvatar).toHaveBeenCalledWith(
+        'user-1',
+        'https://example.com/avatar.jpg',
+      );
     });
   });
 });

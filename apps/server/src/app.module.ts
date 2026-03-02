@@ -17,6 +17,7 @@ import { OpenclawModule } from './openclaw/openclaw.module';
 import { AgentsModule } from './agents/agents.module';
 import { MentionsModule } from './mentions/mentions.module';
 import { ProfileModule } from './profile/profile.module';
+import { UploadModule } from './upload/upload.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { ProfileModule } from './profile/profile.module';
     OpenclawModule,
     AgentsModule,
     MentionsModule,
+    UploadModule,
     ProfileModule,
   ],
   controllers: [AppController],

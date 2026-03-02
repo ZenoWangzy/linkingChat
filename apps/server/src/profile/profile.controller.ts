@@ -13,12 +13,16 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ProfileService } from './profile.service';
+import { UploadService } from '../upload/upload.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @Controller('profile')
 @UseGuards(JwtAuthGuard)
 export class ProfileController {
-  constructor(private readonly profileService: ProfileService) {}
+  constructor(
+    private readonly profileService: ProfileService,
+    private readonly uploadService: UploadService,
+  ) {}
 
   @Get('me')
   async getCurrentUser(@CurrentUser('userId') userId: string) {
@@ -39,9 +43,7 @@ export class ProfileController {
     @CurrentUser('userId') userId: string,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    // TODO: Integrate with UploadService when available (Task #6-8)
-    // For now, return a placeholder URL
-    const avatarUrl = `https://placeholder.com/avatar-${userId}.jpg`;
+    const avatarUrl = await this.uploadService.uploadImage(file, 'avatars');
     await this.profileService.updateAvatar(userId, avatarUrl);
     return { avatarUrl };
   }
