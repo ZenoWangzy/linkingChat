@@ -44,7 +44,19 @@ describe('ConversesService', () => {
         findUnique: jest.fn(),
       },
       bot: { findMany: jest.fn() },
-      $transaction: jest.fn(),
+      groupBan: {  // Phase 9: 群封禁
+        findMany: jest.fn().mockResolvedValue([]),
+        findUnique: jest.fn(),
+        create: jest.fn(),
+        delete: jest.fn(),
+      },
+      $transaction: jest.fn((arg: any) => {
+        // 支持数组和回调函数两种模式
+        if (Array.isArray(arg)) {
+          return Promise.all(arg);
+        }
+        return arg(mockPrisma);
+      }),
     };
 
     mockBroadcast = {

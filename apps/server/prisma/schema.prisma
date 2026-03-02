@@ -114,6 +114,10 @@ model User {
   converseMembers ConverseMember[]
   messages        Message[]
 
+  // Phase 9 新增关系 — 群封禁
+  groupBansIssued   GroupBan[] @relation("GroupBanIssuer")
+  bannedFromGroups  GroupBan[] @relation("GroupBanTarget")
+
   // Sprint 2 新增关系 — Bot
   ownedBots Bot[] @relation("BotOwner")
   botUser   Bot?  @relation("BotUser")
@@ -235,6 +239,9 @@ model Converse {
   aiSuggestions AiSuggestion[]
   aiDrafts      AiDraft[]
 
+  // Phase 9 新增关系
+  groupBans GroupBan[]
+
   @@map("converses")
 }
 
@@ -252,12 +259,14 @@ model ConverseMember {
   lastMessageId     String?
   role              GroupRole?
   nickname          String?
+  mutedUntil        DateTime?  // 禁言到期时间，NULL 表示未禁言
   joinedAt          DateTime  @default(now())
 
   converse Converse @relation(fields: [converseId], references: [id])
   user     User     @relation(fields: [userId], references: [id])
 
   @@id([converseId, userId])
+  @@index([mutedUntil])
   @@map("converse_members")
 }
 
@@ -363,4 +372,23 @@ model AiDraft {
   @@index([userId, status])
   @@index([expiresAt])
   @@map("ai_drafts")
+}
+
+// ========== Phase 9 新增 Models ==========
+
+model GroupBan {
+  id          String   @id @default(cuid())
+  converseId  String
+  userId      String
+  bannedBy    String
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  converse Converse @relation(fields: [converseId], references: [id], onDelete: Cascade)
+  target   User     @relation("GroupBanTarget", fields: [userId], references: [id])
+  issuer   User     @relation("GroupBanIssuer", fields: [bannedBy], references: [id])
+
+  @@unique([converseId, userId])
+  @@index([converseId])
+  @@map("group_bans")
 }

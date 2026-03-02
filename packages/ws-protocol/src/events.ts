@@ -43,6 +43,12 @@ export const CHAT_EVENTS = {
   GROUP_MEMBER_ADDED:         'group:member:added',
   GROUP_MEMBER_REMOVED:       'group:member:removed',
   GROUP_MEMBER_ROLE_UPDATED:  'group:member:role:updated',
+
+  // Phase 9: 群权限增强
+  GROUP_MEMBER_MUTED:   'group:member:muted',
+  GROUP_MEMBER_UNMUTED: 'group:member:unmuted',
+  GROUP_MEMBER_BANNED:  'group:member:banned',
+  GROUP_MEMBER_UNBANNED: 'group:member:unbanned',
 } as const;
 
 export const AI_EVENTS = {

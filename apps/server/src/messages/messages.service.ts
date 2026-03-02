@@ -46,7 +46,18 @@ export class MessagesService {
     // 1. 校验成员身份
     await this.conversesService.verifyMembership(dto.converseId, userId);
 
-    // 2. 如果有 replyToId，校验引用消息存在且属于同一会话
+    // 2. 检查群组禁言状态（Phase 9）
+    const mutedUntil = await this.conversesService.checkMuted(
+      dto.converseId,
+      userId,
+    );
+    if (mutedUntil) {
+      throw new ForbiddenException(
+        `You are muted until ${mutedUntil.toISOString()}`,
+      );
+    }
+
+    // 3. 如果有 replyToId，校验引用消息存在且属于同一会话
     if (dto.replyToId) {
       const replyTarget = await this.prisma.message.findUnique({
         where: { id: dto.replyToId },

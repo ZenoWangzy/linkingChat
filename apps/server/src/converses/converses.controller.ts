@@ -15,6 +15,8 @@ import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { AddMembersDto } from './dto/add-members.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
+import { MuteMemberDto } from './dto/mute-member.dto';
+import { BanMemberDto } from './dto/ban-member.dto';
 
 @Controller('converses')
 @UseGuards(JwtAuthGuard)
@@ -119,5 +121,85 @@ export class ConversesController {
       memberId,
       dto,
     );
+  }
+
+  // ──────────────────────────────────────
+  // Phase 9: 禁言与封禁
+  // ──────────────────────────────────────
+
+  /**
+   * PATCH /api/v1/converses/groups/:converseId/members/:memberId/mute
+   * 禁言群成员
+   */
+  @Patch('groups/:converseId/members/:memberId/mute')
+  muteMember(
+    @CurrentUser('userId') userId: string,
+    @Param('converseId') converseId: string,
+    @Param('memberId') memberId: string,
+    @Body() dto: MuteMemberDto,
+  ) {
+    return this.conversesService.muteMember(
+      userId,
+      converseId,
+      memberId,
+      dto.durationMinutes,
+    );
+  }
+
+  /**
+   * DELETE /api/v1/converses/groups/:converseId/members/:memberId/mute
+   * 解除禁言
+   */
+  @Delete('groups/:converseId/members/:memberId/mute')
+  unmuteMember(
+    @CurrentUser('userId') userId: string,
+    @Param('converseId') converseId: string,
+    @Param('memberId') memberId: string,
+  ) {
+    return this.conversesService.unmuteMember(userId, converseId, memberId);
+  }
+
+  /**
+   * POST /api/v1/converses/groups/:converseId/bans/:userId
+   * 封禁成员（自动踢出）
+   */
+  @Post('groups/:converseId/bans/:targetUserId')
+  banMember(
+    @CurrentUser('userId') userId: string,
+    @Param('converseId') converseId: string,
+    @Param('targetUserId') targetUserId: string,
+    @Body() dto: BanMemberDto,
+  ) {
+    return this.conversesService.banMember(
+      userId,
+      converseId,
+      targetUserId,
+      dto.reason,
+    );
+  }
+
+  /**
+   * DELETE /api/v1/converses/groups/:converseId/bans/:userId
+   * 解封用户
+   */
+  @Delete('groups/:converseId/bans/:targetUserId')
+  unbanMember(
+    @CurrentUser('userId') userId: string,
+    @Param('converseId') converseId: string,
+    @Param('targetUserId') targetUserId: string,
+  ) {
+    return this.conversesService.unbanMember(userId, converseId, targetUserId);
+  }
+
+  /**
+   * GET /api/v1/converses/groups/:converseId/bans
+   * 获取群组封禁列表
+   */
+  @Get('groups/:converseId/bans')
+  getGroupBans(
+    @CurrentUser('userId') userId: string,
+    @Param('converseId') converseId: string,
+  ) {
+    return this.conversesService.getGroupBans(userId, converseId);
   }
 }

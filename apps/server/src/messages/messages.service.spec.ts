@@ -48,6 +48,7 @@ describe('MessagesService', () => {
   const mockConverses = {
     verifyMembership: jest.fn(),
     getMemberIds: jest.fn(),
+    checkMuted: jest.fn().mockResolvedValue(null), // Phase 9: 默认未禁言
   };
 
   const mockWhisper = {

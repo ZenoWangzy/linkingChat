@@ -122,6 +122,7 @@ export class ConversesService {
             ...m.user,
             role: m.role,
             isOpen: m.isOpen,
+            mutedUntil: m.mutedUntil?.toISOString() ?? null,
           })),
           lastMessage: member.converse.messages[0] ?? null,
           unreadCount,
@@ -421,6 +422,18 @@ export class ConversesService {
       throw new BadRequestException('One or more member IDs are invalid');
     }
 
+    // Phase 9: 检查是否被封禁
+    const bannedUsers = await this.prisma.groupBan.findMany({
+      where: { converseId, userId: { in: newMemberIds } },
+      select: { userId: true },
+    });
+    if (bannedUsers.length > 0) {
+      const bannedIds = bannedUsers.map((b) => b.userId);
+      throw new BadRequestException(
+        `Users are banned from this group: ${bannedIds.join(', ')}`,
+      );
+    }
+
     // Create member records
     await this.prisma.converseMember.createMany({
       data: newMemberIds.map((id) => ({
@@ -669,6 +682,304 @@ export class ConversesService {
     );
 
     return { updated: true };
+  }
+
+  // ──────────────────────────────────────
+  // Phase 9: 禁言与封禁
+  // ──────────────────────────────────────
+
+  /**
+   * 禁言群成员
+   * 权限矩阵：OWNER/ADMIN 可禁言 MEMBER，OWNER 可禁言 ADMIN
+   */
+  async muteMember(
+    userId: string,
+    converseId: string,
+    memberId: string,
+    durationMinutes: number,
+  ) {
+    if (userId === memberId) {
+      throw new BadRequestException('Cannot mute yourself');
+    }
+
+    const actor = await this.requireGroupRole(converseId, userId, [
+      'OWNER',
+      'ADMIN',
+    ]);
+    const target = await this.prisma.converseMember.findUnique({
+      where: { converseId_userId: { converseId, userId: memberId } },
+    });
+
+    if (!target) {
+      throw new NotFoundException('Member not found');
+    }
+
+    // ADMIN 不能禁言 OWNER 或其他 ADMIN
+    if (actor.role === 'ADMIN' && target.role !== 'MEMBER') {
+      throw new ForbiddenException('Admin can only mute regular members');
+    }
+
+    const mutedUntil = new Date(Date.now() + durationMinutes * 60 * 1000);
+
+    await this.prisma.converseMember.update({
+      where: { converseId_userId: { converseId, userId: memberId } },
+      data: { mutedUntil },
+    });
+
+    const payload = {
+      converseId,
+      userId: memberId,
+      mutedBy: userId,
+      mutedUntil: mutedUntil.toISOString(),
+      durationMinutes,
+    };
+
+    // 广播到群房间
+    this.broadcastService.toRoom(
+      converseId,
+      CHAT_EVENTS.GROUP_MEMBER_MUTED,
+      payload,
+    );
+
+    // 同时通知被禁言的用户
+    this.broadcastService.unicast(
+      memberId,
+      CHAT_EVENTS.GROUP_MEMBER_MUTED,
+      payload,
+    );
+
+    this.logger.log(
+      `Member ${memberId} muted in group ${converseId} by ${userId} for ${durationMinutes} minutes`,
+    );
+
+    return { mutedUntil: mutedUntil.toISOString() };
+  }
+
+  /**
+   * 解除禁言
+   */
+  async unmuteMember(
+    userId: string,
+    converseId: string,
+    memberId: string,
+  ) {
+    await this.requireGroupRole(converseId, userId, ['OWNER', 'ADMIN']);
+
+    const target = await this.prisma.converseMember.findUnique({
+      where: { converseId_userId: { converseId, userId: memberId } },
+    });
+
+    if (!target) {
+      throw new NotFoundException('Member not found');
+    }
+
+    await this.prisma.converseMember.update({
+      where: { converseId_userId: { converseId, userId: memberId } },
+      data: { mutedUntil: null },
+    });
+
+    const payload = {
+      converseId,
+      userId: memberId,
+      unmutedBy: userId,
+    };
+
+    this.broadcastService.toRoom(
+      converseId,
+      CHAT_EVENTS.GROUP_MEMBER_UNMUTED,
+      payload,
+    );
+
+    this.broadcastService.unicast(
+      memberId,
+      CHAT_EVENTS.GROUP_MEMBER_UNMUTED,
+      payload,
+    );
+
+    this.logger.log(
+      `Member ${memberId} unmuted in group ${converseId} by ${userId}`,
+    );
+
+    return { success: true };
+  }
+
+  /**
+   * 封禁群成员（自动踢出 + 黑名单）
+   * 权限矩阵：OWNER/ADMIN 可封禁 MEMBER，OWNER 可封禁 ADMIN
+   */
+  async banMember(
+    userId: string,
+    converseId: string,
+    targetUserId: string,
+    reason?: string,
+  ) {
+    if (userId === targetUserId) {
+      throw new BadRequestException('Cannot ban yourself');
+    }
+
+    const actor = await this.requireGroupRole(converseId, userId, [
+      'OWNER',
+      'ADMIN',
+    ]);
+    const target = await this.prisma.converseMember.findUnique({
+      where: { converseId_userId: { converseId, userId: targetUserId } },
+    });
+
+    if (!target) {
+      throw new NotFoundException('Member not found');
+    }
+
+    // ADMIN 不能封禁 OWNER 或其他 ADMIN
+    if (actor.role === 'ADMIN' && target.role !== 'MEMBER') {
+      throw new ForbiddenException('Admin can only ban regular members');
+    }
+
+    // 在事务中执行：创建封禁记录 + 移除成员
+    await this.prisma.$transaction([
+      this.prisma.groupBan.create({
+        data: {
+          converseId,
+          userId: targetUserId,
+          bannedBy: userId,
+          reason,
+        },
+      }),
+      this.prisma.converseMember.delete({
+        where: { converseId_userId: { converseId, userId: targetUserId } },
+      }),
+    ]);
+
+    const payload = {
+      converseId,
+      userId: targetUserId,
+      bannedBy: userId,
+      reason,
+    };
+
+    this.broadcastService.toRoom(
+      converseId,
+      CHAT_EVENTS.GROUP_MEMBER_BANNED,
+      payload,
+    );
+
+    this.broadcastService.unicast(
+      targetUserId,
+      CHAT_EVENTS.GROUP_MEMBER_BANNED,
+      payload,
+    );
+
+    this.logger.log(
+      `Member ${targetUserId} banned from group ${converseId} by ${userId}`,
+    );
+
+    return { banned: true, removedFromGroup: true };
+  }
+
+  /**
+   * 解封用户
+   */
+  async unbanMember(
+    userId: string,
+    converseId: string,
+    targetUserId: string,
+  ) {
+    await this.requireGroupRole(converseId, userId, ['OWNER', 'ADMIN']);
+
+    const ban = await this.prisma.groupBan.findUnique({
+      where: { converseId_userId: { converseId, userId: targetUserId } },
+    });
+
+    if (!ban) {
+      throw new NotFoundException('Ban record not found');
+    }
+
+    await this.prisma.groupBan.delete({
+      where: { converseId_userId: { converseId, userId: targetUserId } },
+    });
+
+    const payload = {
+      converseId,
+      userId: targetUserId,
+      unbannedBy: userId,
+    };
+
+    this.broadcastService.toRoom(
+      converseId,
+      CHAT_EVENTS.GROUP_MEMBER_UNBANNED,
+      payload,
+    );
+
+    this.logger.log(
+      `User ${targetUserId} unbanned from group ${converseId} by ${userId}`,
+    );
+
+    return { unbanned: true };
+  }
+
+  /**
+   * 获取群组封禁列表
+   */
+  async getGroupBans(userId: string, converseId: string) {
+    await this.requireGroupRole(converseId, userId, ['OWNER', 'ADMIN']);
+
+    const bans = await this.prisma.groupBan.findMany({
+      where: { converseId },
+      include: {
+        target: { select: USER_SELECT },
+        issuer: { select: USER_SELECT },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return {
+      bans: bans.map((ban) => ({
+        userId: ban.userId,
+        user: ban.target,
+        bannedBy: ban.bannedBy,
+        banner: ban.issuer,
+        reason: ban.reason,
+        createdAt: ban.createdAt.toISOString(),
+      })),
+    };
+  }
+
+  /**
+   * 检查用户是否被封禁（内部方法）
+   */
+  async checkBanned(converseId: string, userId: string): Promise<boolean> {
+    const ban = await this.prisma.groupBan.findUnique({
+      where: { converseId_userId: { converseId, userId } },
+    });
+    return !!ban;
+  }
+
+  /**
+   * 检查用户是否被禁言（内部方法）
+   * 返回 null 表示未禁言，否则返回到期时间
+   */
+  async checkMuted(
+    converseId: string,
+    userId: string,
+  ): Promise<Date | null> {
+    const member = await this.prisma.converseMember.findUnique({
+      where: { converseId_userId: { converseId, userId } },
+      select: { mutedUntil: true },
+    });
+
+    if (!member?.mutedUntil) {
+      return null;
+    }
+
+    // 如果禁言时间已过，自动清除
+    if (member.mutedUntil <= new Date()) {
+      await this.prisma.converseMember.update({
+        where: { converseId_userId: { converseId, userId } },
+        data: { mutedUntil: null },
+      });
+      return null;
+    }
+
+    return member.mutedUntil;
   }
 
   // ──────────────────────────────────────
