@@ -78,8 +78,7 @@ class _BottomNavScaffoldState extends ConsumerState<BottomNavScaffold> {
       case 2:
         context.go('/devices');
       case 3:
-        // Profile not yet implemented — stay on current page
-        break;
+        context.go('/profile');
     }
   }
 }

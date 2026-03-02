@@ -11,6 +11,7 @@ import 'features/chat/pages/chat_thread_page.dart';
 import 'features/chat/pages/group_detail_page.dart';
 import 'features/friends/pages/friends_list_page.dart';
 import 'features/friends/pages/add_friend_page.dart';
+import 'features/profile/pages/profile_page.dart';
 import 'features/shared/widgets/bottom_nav.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -47,6 +48,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/devices',
             builder: (context, state) => const DeviceListPage(),
+          ),
+          GoRoute(
+            path: '/profile',
+            builder: (context, state) => const ProfilePage(),
           ),
         ],
       ),
