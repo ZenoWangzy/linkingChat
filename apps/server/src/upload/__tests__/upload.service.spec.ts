@@ -1,8 +1,8 @@
 // apps/server/src/upload/__tests__/upload.service.spec.ts
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigModule } from '@nestjs/config';
 import { UploadService } from '../upload.service';
 import { BadRequestException } from '@nestjs/common';
-import { Client } from 'minio';
 
 describe('UploadService', () => {
   let service: UploadService;
@@ -16,6 +16,7 @@ describe('UploadService', () => {
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
+      imports: [ConfigModule.forRoot()],
       providers: [
         UploadService,
         {
@@ -50,6 +51,7 @@ describe('UploadService', () => {
         'avatars',
         expect.stringMatching(/\.jpg$/),
         mockFile.buffer,
+        mockFile.size,
         expect.objectContaining({
           'Content-Type': 'image/jpeg',
         }),

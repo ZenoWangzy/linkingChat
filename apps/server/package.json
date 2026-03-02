@@ -36,6 +36,7 @@
     "class-validator": "^0.14.0",
     "ioredis": "^5.4.0",
     "jsonwebtoken": "^9.0.3",
+    "minio": "^8.0.7",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.0",
     "reflect-metadata": "^0.2.0",
