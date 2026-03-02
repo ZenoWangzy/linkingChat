@@ -1,6 +1,7 @@
 // apps/mobile/lib/features/profile/pages/profile_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../features/auth/providers/auth_provider.dart';
 import '../providers/profile_provider.dart';
 import '../widgets/profile_avatar.dart';
 import '../widgets/settings_tile.dart';
@@ -371,9 +372,12 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             child: Text('取消'),
           ),
           TextButton(
-            onPressed: () {
-              // TODO: 调用登出逻辑
+            onPressed: () async {
               Navigator.pop(context);
+              // Call logout from AuthProvider
+              await ref.read(authProvider.notifier).logout();
+              // Navigator will automatically redirect to login page
+              // because authState changes to unauthenticated
             },
             child: Text('确定', style: TextStyle(color: Colors.red)),
           ),
