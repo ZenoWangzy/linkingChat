@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../constants/api_endpoints.dart';
+import '../services/group_moderation_service.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import 'auth_repository.dart';
 import 'auth_interceptor.dart';
@@ -27,4 +28,9 @@ final dioProvider = Provider<Dio>((ref) {
   ));
 
   return dio;
+});
+
+final groupModerationServiceProvider = Provider<GroupModerationService>((ref) {
+  final dio = ref.read(dioProvider);
+  return GroupModerationService(dio);
 });
