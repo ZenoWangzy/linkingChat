@@ -14,7 +14,8 @@ out/
 .env.*.local
 
 # Keys (sensitive)
-keys/*.pem
+keys/
+*.pem
 
 # IDE
 .vscode/
